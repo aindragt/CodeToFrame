@@ -134,3 +134,7 @@ export function extractPageDOM(): DesignPayload {
     elements
   };
 }
+
+// Mengekspos ke objek window global agar bisa dipanggil secara aman oleh executeScript
+(window as any).extractPageDOM = extractPageDOM;
+

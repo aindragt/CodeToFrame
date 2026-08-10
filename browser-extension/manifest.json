@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "CodeToFrame - Extractor",
+  "version": "1.0.0",
+  "description": "Extracts HTML and CSS elements from the active tab and copies them as a JSON structure ready to be pasted into the Figma plugin.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "clipboardWrite"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/extractor.ts"]
+    }
+  ]
+}
