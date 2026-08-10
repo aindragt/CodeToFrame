@@ -1,4 +1,4 @@
-import type { DesignPayload, FigmaNode, RGBColor } from '../../shared/types';
+import type { DesignPayload, RGBColor } from '../../shared/types';
 
 /**
  * Mengonversi nilai RGB (0-255) ke format Figma (0.0-1.0).
