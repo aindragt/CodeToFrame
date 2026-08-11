@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodeToFrame Generator</title>
+  <style>
+    /* Reset CSS & Tipografi standar Figma */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 11px;
+      line-height: 16px;
+      color: #333333;
+      background-color: #ffffff;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Judul dan Deskripsi */
+    h2 {
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: #000000;
+    }
+
+    p.description {
+      color: #777777;
+      margin-bottom: 12px;
+      font-size: 11px;
+    }
+
+    /* Container untuk Input Area */
+    .input-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 12px;
+      min-height: 0; /* Penting untuk flex scroll child */
+    }
+
+    /* Textarea bergaya Figma */
+    textarea {
+      width: 100%;
+      flex: 1;
+      resize: none;
+      padding: 8px;
+      border: 1px solid #e5e5e5;
+      border-radius: 2px;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 10px;
+      background-color: #fafafa;
+      color: #333333;
+      outline: none;
+    }
+
+    textarea:focus {
+      border-color: #18a0fb;
+      background-color: #ffffff;
+    }
+
+    /* Area Status & Informasi */
+    .status-area {
+      min-height: 36px;
+      border-radius: 2px;
+      padding: 8px;
+      margin-bottom: 12px;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      background-color: #f5f5f5;
+      border: 1px solid #e5e5e5;
+    }
+
+    .status-idle {
+      color: #777777;
+    }
+
+    .status-error {
+      color: #f24e1e;
+      background-color: #ffebe6;
+      border-color: #ffc4b3;
+    }
+
+    .status-success {
+      color: #0fa958;
+      background-color: #e6f6eb;
+      border-color: #b3e6c9;
+    }
+
+    .status-info {
+      color: #18a0fb;
+      background-color: #e5f5ff;
+      border-color: #b3e0ff;
+    }
+
+    /* Tombol Utama dan Pembatalan */
+    .action-bar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    button {
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      outline: none;
+      transition: background-color 0.15s, border-color 0.15s;
+    }
+
+    /* Tombol Utama (Figma Primary Blue) */
+    .btn-primary {
+      background-color: #18a0fb;
+      color: #ffffff;
+    }
+
+    .btn-primary:hover {
+      background-color: #0d8de3;
+    }
+
+    .btn-primary:active {
+      background-color: #0a7ccb;
+    }
+
+    .btn-primary:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+
+    /* Tombol Batal/Secondary */
+    .btn-secondary {
+      background-color: #ffffff;
+      border-color: #b3b3b3;
+      color: #333333;
+    }
+
+    .btn-secondary:hover {
+      border-color: #333333;
+      background-color: #fafafa;
+    }
+
+    .btn-secondary:active {
+      background-color: #f0f0f0;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Generate Design dari CodeToFrame</h2>
+  <p class="description">Tempelkan data JSON hasil ekstraksi dari Chrome Extension ke kolom input di bawah ini.</p>
+
+  <div class="input-container">
+    <textarea id="json-input" placeholder='{\n  "sourceUrl": "...",\n  "viewportWidth": 1440,\n  "elements": [\n    ...\n  ]\n}'></textarea>
+  </div>
+
+  <div class="status-area status-idle" id="status-msg">
+    Menunggu data JSON ditempelkan...
+  </div>
+
+  <div class="action-bar">
+    <button class="btn-secondary" id="cancel-btn">Batal</button>
+    <button class="btn-primary" id="generate-btn">Generate Design</button>
+  </div>
+
+  <script>
+    const jsonInput = document.getElementById('json-input');
+    const generateBtn = document.getElementById('generate-btn');
+    const cancelBtn = document.getElementById('cancel-btn');
+    const statusMsg = document.getElementById('status-msg');
+
+    /**
+     * Memperbarui antarmuka status notifikasi untuk pengguna.
+     *
+     * @param {string} text - Pesan status
+     * @param {'idle' | 'info' | 'success' | 'error'} type - Jenis status untuk kelas CSS
+     */
+    function updateStatus(text, type) {
+      statusMsg.textContent = text;
+      statusMsg.className = 'status-area status-' + type;
+    }
+
+    // Aksi tombol Batal (menutup plugin)
+    cancelBtn.addEventListener('click', () => {
+      parent.postMessage({ pluginMessage: { type: 'cancel' } }, '*');
+    });
+
+    // Aksi tombol Generate Design
+    generateBtn.addEventListener('click', () => {
+      const rawText = jsonInput.value.trim();
+
+      if (!rawText) {
+        updateStatus('Input kosong. Harap paste data JSON terlebih dahulu.', 'error');
+        return;
+      }
+
+      let parsedData;
+      try {
+        parsedData = JSON.parse(rawText);
+      } catch (err) {
+        updateStatus('Format JSON tidak valid. Periksa kembali struktur teks yang Anda paste.', 'error');
+        return;
+      }
+
+      // Validasi struktur payload minimal
+      if (!parsedData.elements || !Array.isArray(parsedData.elements)) {
+        updateStatus('Struktur data tidak valid. Objek "elements" tidak ditemukan atau bukan array.', 'error');
+        return;
+      }
+
+      updateStatus('Memproses data ke Figma sandbox...', 'info');
+      generateBtn.disabled = true;
+
+      // Mengirimkan pesan outbound ke controller utama (code.ts)
+      parent.postMessage({
+        pluginMessage: {
+          type: 'render-design',
+          payload: parsedData
+        }
+      }, '*');
+    });
+
+    // Menerima pesan inbound balik dari controller utama (code.ts)
+    window.onmessage = (event) => {
+      const message = event.data.pluginMessage;
+      if (!message) return;
+
+      if (message.type === 'status') {
+        if (message.success) {
+          if (message.message.includes('berhasil')) {
+            updateStatus(message.message, 'success');
+            generateBtn.disabled = false;
+          } else {
+            updateStatus(message.message, 'info');
+          }
+        } else {
+          updateStatus(message.message, 'error');
+          generateBtn.disabled = false;
+        }
+      }
+    };
+  </script>
+</body>
+</html>
