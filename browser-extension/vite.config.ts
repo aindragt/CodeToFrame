@@ -4,7 +4,7 @@ import { resolve } from 'path';
 export default defineConfig({
   build: {
     outDir: 'dist',
-    emptyDirBeforeWrite: true,
+    emptyOutDir: true,
     rollupOptions: {
       input: {
         popup: resolve(__dirname, 'popup.html'),
@@ -19,3 +19,4 @@ export default defineConfig({
   },
   publicDir: 'public',
 });
+

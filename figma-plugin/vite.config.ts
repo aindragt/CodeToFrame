@@ -4,7 +4,7 @@ import { resolve } from 'path';
 export default defineConfig({
   build: {
     outDir: 'dist',
-    emptyDirBeforeWrite: true,
+    emptyOutDir: true,
     lib: {
       entry: resolve(__dirname, 'src/code.ts'),
       formats: ['iife'],
@@ -19,3 +19,4 @@ export default defineConfig({
     },
   },
 });
+
