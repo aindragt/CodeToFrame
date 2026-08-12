@@ -1,599 +1,1065 @@
-# SKILL.md — AI Workflow Procedures for CodeToFrame
+# 📚 SKILL.md — Technical Knowledge Base for CodeToFrame v2.0
 
-> **Purpose:** Step-by-step procedures for AI assistants to execute common, repetitive tasks in this repository. Each skill is a self-contained checklist — follow every step in order, do not skip.  
-> **Audience:** AI coding assistants (Cursor, Copilot, Claude, Gemini, etc.)  
-> **Last updated:** August 10, 2026
-
----
-
-## How to Use This File
-
-When the user requests a task that matches one of the skills below, follow the corresponding procedure **exactly**. Each skill uses this format:
-
-```
-IF USER ASKS TO: [description of the task]
-THEN EXECUTE THESE STEPS:
-  Step 1 → ...
-  Step 2 → ...
-  ...
-VERIFICATION:
-  → How to confirm the task was completed correctly
-```
-
-**Rules:**
-- Execute steps **in order**. Later steps depend on earlier ones.
-- If a step references a file that does not exist yet, **create it** following the naming conventions in `AGENTS.md`.
-- If a step is unclear for the specific request, **ask the user** before proceeding.
-- After completing all steps, run the **Verification** checklist.
+> **Tujuan:** Basis pengetahuan teknis (Cheat Sheet) berisi potongan kode siap pakai dan pola desain yang dibutuhkan saat mengeksekusi `TODO.md`.  
+> **Audiens:** Junior Developer dan AI Coding Agent.  
+> **Bahasa Kode:** JavaScript Native (ES6+) — sesuai aturan `AGENTS.md` v2.0.  
+> **Terakhir diperbarui:** 12 Agustus 2026
 
 ---
 
-## Table of Skills
+## Daftar Isi
 
-| # | Skill | When to Use |
-|---|---|---|
-| 1 | [Adding a New Supported CSS Property](#skill-1-adding-a-new-supported-css-property) | User wants to extract and render a new CSS property (e.g., `border-radius`, `opacity`) |
-| 2 | [Adding a New HTML Element Type](#skill-2-adding-a-new-html-element-type) | User wants to support a new element type (e.g., `BUTTON`, `IMAGE`, `INPUT`) |
-| 3 | [Testing & Building the Project](#skill-3-testing--building-the-project) | User wants to type-check, build, or prepare the project for deployment |
-
----
-
-## SKILL 1: Adding a New Supported CSS Property
-
-### IF USER ASKS TO:
-
-> "Add support for `<CSS_PROPERTY>`" (e.g., `border-radius`, `opacity`, `box-shadow`, `border`)
-
-### THEN EXECUTE THESE STEPS:
+1. [Konversi Warna CSS ke Figma](#1--konversi-warna-css-ke-figma)
+2. [Ekstraksi Dimensi & Geometri](#2--ekstraksi-dimensi--geometri)
+3. [Injeksi Native Clipboard API](#3--injeksi-native-clipboard-api)
+4. [Skema Node Figma (JSON Payload)](#4--skema-node-figma-json-payload)
+5. [Penanganan Properti CSS Kompleks](#5--penanganan-properti-css-kompleks)
+6. [Pola Defensive Programming](#6--pola-defensive-programming)
+7. [Referensi Cepat API](#7--referensi-cepat-api)
 
 ---
 
-#### Step 1 — Update the Shared Type Definitions (The "Contract")
+## 1. 🎨 Konversi Warna CSS ke Figma
 
-**Files to modify:**
-- `browser-extension/src/types/schema.ts`
-- `figma-plugin/src/types/schema.ts`
+### Konsep Kunci
 
-**Action:** Add the new property field to the appropriate element interface(s).
+| Sistem | Format | Skala | Contoh |
+|---|---|---|---|
+| **CSS (Browser)** | `rgb(R, G, B)` atau `rgba(R, G, B, A)` | R/G/B: 0–255, A: 0–1 | `rgba(59, 130, 246, 0.8)` |
+| **CSS (Hex)** | `#RRGGBB` atau `#RGB` | Hex per channel | `#3B82F6` |
+| **Figma API** | `{ r, g, b }` + terpisah `opacity` | R/G/B: **0–1** | `{ r: 0.231, g: 0.510, b: 0.965 }` |
 
-**Checklist:**
-- [ ] Determine which element type(s) need this property (`RectangleElement`, `TextElement`, or both).
-- [ ] Choose a descriptive `camelCase` field name that matches the CSS property.
-- [ ] Add the field as **optional** (`?:`) unless the user explicitly says it should be required.
-- [ ] Use the correct TypeScript type (see mapping table below).
+> ⚠️ **Perbedaan kritis:** CSS menggunakan skala 0–255 untuk warna, Figma menggunakan skala 0–1. **Selalu bagi dengan 255** saat mengonversi.
 
-**CSS → TypeScript Type Mapping:**
+### Fungsi Utilitas: `parseColor(cssColorString)`
 
-| CSS Value Type | TypeScript Type | Example |
-|---|---|---|
-| Length (px) | `number` | `borderRadius?: number` |
-| Color | `RGBColor` | `borderColor?: RGBColor` |
-| Percentage | `number` (0–100) | `opacity?: number` |
-| Keyword | `string` literal union | `borderStyle?: "solid" \| "dashed" \| "none"` |
-| Shorthand (multiple values) | Dedicated interface | `border?: BorderStyle` (create new interface) |
+Fungsi ini menerima string warna CSS mentah dan mengembalikan objek RGBA dengan skala 0–255 (konversi ke Figma dilakukan terpisah di tahap mapping).
 
-**Example — Adding `borderRadius`:**
+```javascript
+/**
+ * Mem-parse string warna CSS menjadi objek RGBA (skala 0-255 untuk RGB, 0-1 untuk alpha).
+ * Mendukung format: rgb(), rgba(), hex 3/6/8 digit, dan keyword 'transparent'.
+ *
+ * @param {string} raw - String warna CSS mentah dari getComputedStyle()
+ * @returns {{r: number, g: number, b: number, a: number}|null} Objek RGBA atau null jika gagal
+ *
+ * @example
+ * parseColor('rgb(59, 130, 246)')     // → { r: 59, g: 130, b: 246, a: 1 }
+ * parseColor('rgba(0, 0, 0, 0.5)')    // → { r: 0, g: 0, b: 0, a: 0.5 }
+ * parseColor('#3B82F6')               // → { r: 59, g: 130, b: 246, a: 1 }
+ * parseColor('#F80')                  // → { r: 255, g: 136, b: 0, a: 1 }
+ * parseColor('transparent')           // → { r: 0, g: 0, b: 0, a: 0 }
+ * parseColor(null)                    // → null
+ */
+export function parseColor(raw) {
+  // Guard clause: input tidak valid
+  if (!raw || typeof raw !== 'string') return null;
 
-```typescript
-// In schema.ts — BOTH browser-extension AND figma-plugin
-export interface RectangleElement {
-  type: "RECTANGLE";
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  backgroundColor: RGBColor;
-  borderRadius?: number; // ← NEW: corner radius in pixels (0 = sharp corners)
-}
-```
+  const trimmed = raw.trim().toLowerCase();
 
-> **⚠️ CRITICAL:** Both `schema.ts` files must be identical. If you edit one, edit the other the same way.
-
----
-
-#### Step 2 — Update the Extractor (Browser Extension)
-
-**File to modify:**
-- `browser-extension/src/content/extractor.ts`
-
-**Action:** Read the CSS property value from the DOM element and include it in the extracted JSON.
-
-**Checklist:**
-- [ ] Locate the extraction function that builds element objects (look for `getComputedStyle` calls).
-- [ ] Add a line to read the new CSS property using `window.getComputedStyle(element).propertyName`.
-- [ ] Parse the raw CSS value into the correct format (see parsing guide below).
-- [ ] Add the parsed value to the element object being constructed.
-- [ ] Handle edge cases: what if the value is `""`, `"none"`, `"0px"`, or `undefined`? Set a sensible default or omit the field.
-
-**CSS Value Parsing Guide:**
-
-| CSS Raw Value | How to Parse | Result |
-|---|---|---|
-| `"12px"` | `parseFloat("12px")` | `12` |
-| `"rgb(59, 130, 246)"` | Regex or split on `,` then `parseInt` each | `{ r: 59, g: 130, b: 246 }` |
-| `"rgba(59, 130, 246, 0.5)"` | Same as above, extract alpha separately | `{ r: 59, g: 130, b: 246 }` + `opacity: 0.5` |
-| `"0px"` or `"none"` | Treat as default / skip | `undefined` or `0` |
-| `"transparent"` | Skip — no meaningful color | `undefined` |
-
-**Example — Extracting `borderRadius`:**
-
-```typescript
-// In extractor.ts
-const computedStyle = window.getComputedStyle(element);
-
-// Read border-radius (CSS returns "8px" or "0px")
-const rawBorderRadius = computedStyle.borderRadius;
-const borderRadius = parseFloat(rawBorderRadius) || 0;
-
-// Only include if non-zero (to keep JSON clean)
-const rectangleElement: RectangleElement = {
-  type: "RECTANGLE",
-  x: rect.x,
-  y: rect.y,
-  width: rect.width,
-  height: rect.height,
-  backgroundColor: parsedColor,
-  ...(borderRadius > 0 && { borderRadius }), // ← NEW: conditional inclusion
-};
-```
-
----
-
-#### Step 3 — Update the Renderer (Figma Plugin)
-
-**File to modify:**
-- `figma-plugin/src/plugin/renderer.ts`
-
-**Action:** Read the new property from the JSON element and apply it to the Figma node.
-
-**Checklist:**
-- [ ] Locate the render function for the relevant element type (e.g., `renderRectangle`, `renderText`).
-- [ ] After creating the Figma node, check if the new property exists in the element data.
-- [ ] Apply the value using the correct Figma API call (see mapping table below).
-- [ ] Handle the case where the property is `undefined` (optional field) — use a sensible default or skip.
-
-**JSON Property → Figma API Mapping:**
-
-| JSON Property | Figma API | Notes |
-|---|---|---|
-| `borderRadius` (number) | `node.cornerRadius = value` | Works on `RectangleNode` |
-| `opacity` (0–100) | `node.opacity = value / 100` | Figma uses 0–1 range |
-| `borderColor` (RGBColor) | `node.strokes = [{ type: 'SOLID', color: toFigmaColor(value) }]` | Must convert 0–255 → 0–1 |
-| `borderWidth` (number) | `node.strokeWeight = value` | In pixels |
-
-**Example — Rendering `borderRadius`:**
-
-```typescript
-// In renderer.ts
-function renderRectangle(element: RectangleElement): RectangleNode {
-  const rect = figma.createRectangle();
-  rect.x = element.x;
-  rect.y = element.y;
-  rect.resize(element.width, element.height);
-  rect.fills = [{ type: 'SOLID', color: toFigmaColor(element.backgroundColor) }];
-
-  // ← NEW: Apply border radius if present
-  if (element.borderRadius !== undefined && element.borderRadius > 0) {
-    rect.cornerRadius = element.borderRadius;
+  // Kasus khusus: transparent
+  if (trimmed === 'transparent' || trimmed === 'rgba(0, 0, 0, 0)') {
+    return { r: 0, g: 0, b: 0, a: 0 };
   }
 
-  return rect;
-}
-```
+  // ─── Format 1: rgb(R, G, B) atau rgba(R, G, B, A) ───
+  const rgbMatch = trimmed.match(
+    /rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*(?:,\s*([\d.]+))?\s*\)/
+  );
+  if (rgbMatch) {
+    return {
+      r: clamp(parseInt(rgbMatch[1], 10), 0, 255),
+      g: clamp(parseInt(rgbMatch[2], 10), 0, 255),
+      b: clamp(parseInt(rgbMatch[3], 10), 0, 255),
+      a: rgbMatch[4] !== undefined ? clamp(parseFloat(rgbMatch[4]), 0, 1) : 1,
+    };
+  }
 
----
+  // ─── Format 2: Hex (#RGB, #RRGGBB, #RRGGBBAA) ───
+  const hexMatch = trimmed.match(/^#([0-9a-f]{3,8})$/);
+  if (hexMatch) {
+    const hex = hexMatch[1];
 
-#### Step 4 — Update Documentation
+    // 3-digit: #RGB → #RRGGBB
+    if (hex.length === 3) {
+      return {
+        r: parseInt(hex[0] + hex[0], 16),
+        g: parseInt(hex[1] + hex[1], 16),
+        b: parseInt(hex[2] + hex[2], 16),
+        a: 1,
+      };
+    }
 
-**Files to update:**
-- `PRD.md` — Add the new property to the "Properti yang Disalin" table in Section 5.2.
-- `AGENTS.md` — If the property is now part of MVP scope, move it from the "NOT Supported" table to the "Supported" table in Section 2.
+    // 6-digit: #RRGGBB
+    if (hex.length === 6) {
+      return {
+        r: parseInt(hex.slice(0, 2), 16),
+        g: parseInt(hex.slice(2, 4), 16),
+        b: parseInt(hex.slice(4, 6), 16),
+        a: 1,
+      };
+    }
 
----
+    // 8-digit: #RRGGBBAA
+    if (hex.length === 8) {
+      return {
+        r: parseInt(hex.slice(0, 2), 16),
+        g: parseInt(hex.slice(2, 4), 16),
+        b: parseInt(hex.slice(4, 6), 16),
+        a: parseFloat((parseInt(hex.slice(6, 8), 16) / 255).toFixed(3)),
+      };
+    }
+  }
 
-### VERIFICATION:
-
-Run these checks after completing all steps:
-
-```bash
-# 1. Type-check browser extension (must pass with zero errors)
-cd browser-extension && npx tsc --noEmit
-
-# 2. Type-check Figma plugin (must pass with zero errors)
-cd figma-plugin && npx tsc --noEmit
-
-# 3. Build both projects
-cd browser-extension && npm run build
-cd figma-plugin && npm run build
-```
-
-- [ ] Both `schema.ts` files contain the same interface changes.
-- [ ] Extractor reads the CSS property and outputs it in JSON.
-- [ ] Renderer reads the JSON property and applies it to the Figma node.
-- [ ] Edge cases handled (missing value, zero, `"none"`, etc.).
-- [ ] No TypeScript errors in either project.
-- [ ] Documentation updated.
-
----
-
-## SKILL 2: Adding a New HTML Element Type
-
-### IF USER ASKS TO:
-
-> "Add support for `<ELEMENT_TYPE>` elements" (e.g., `BUTTON`, `IMAGE`, `INPUT`, `LINK`)
-
-### THEN EXECUTE THESE STEPS:
-
----
-
-#### Step 1 — Design the Element Interface
-
-Before writing any code, determine:
-
-| Question | How to Decide | Example (IMAGE) |
-|---|---|---|
-| What Figma node type? | Check [Figma Plugin API docs](https://www.figma.com/plugin-docs/api/api-reference/) | `RectangleNode` with image fill |
-| What properties to extract? | List the CSS/HTML attributes unique to this element | `src`, `alt`, `width`, `height` |
-| What properties to render? | Map each extracted property to a Figma API call | `node.fills = [{ type: 'IMAGE', ... }]` |
-
-Document your design decision in a brief comment before proceeding.
-
----
-
-#### Step 2 — Update the Shared Type Definitions
-
-**Files to modify:**
-- `browser-extension/src/types/schema.ts`
-- `figma-plugin/src/types/schema.ts`
-
-**Action:** Create a new element interface and add it to the `FrameElement` union type.
-
-**Checklist:**
-- [ ] Create a new interface named `<Type>Element` (PascalCase) with `type: "<TYPE>"` (UPPER_SNAKE_CASE string literal).
-- [ ] Include base fields: `x`, `y`, `width`, `height` (all elements need these).
-- [ ] Add type-specific fields with clear JSDoc comments.
-- [ ] Add the new interface to the `FrameElement` union type.
-
-**Example — Adding `ImageElement`:**
-
-```typescript
-// In schema.ts — BOTH projects
-
-/** Represents an image element extracted from the DOM. */
-export interface ImageElement {
-  type: "IMAGE";
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  /** The source URL of the image. */
-  imageUrl: string;
-  /** Alt text for accessibility context. */
-  altText: string;
-}
-
-// Update the union type
-export type FrameElement = RectangleElement | TextElement | ImageElement; // ← ADD HERE
-```
-
-> **⚠️ CRITICAL:** Both `schema.ts` files must be identical.
-
----
-
-#### Step 3 — Update the Extractor (Browser Extension)
-
-**File to modify:**
-- `browser-extension/src/content/extractor.ts`
-
-**Action:** Add detection logic for the new HTML element and extract its properties.
-
-**Checklist:**
-- [ ] Add a detection condition to identify the element type. This could be:
-  - Tag name check: `element.tagName === 'IMG'`
-  - CSS property check: `computedStyle.backgroundImage !== 'none'`
-  - Content check: `element.textContent.trim().length > 0`
-- [ ] Create an extraction function specific to this element type.
-- [ ] Wire the detection into the main traversal loop (the `if/else if` chain or `switch` statement).
-- [ ] Handle graceful skipping if critical data is missing.
-
-**Example — Extracting `IMAGE` elements:**
-
-```typescript
-// In extractor.ts
-
-/**
- * Checks if a DOM element should be classified as an IMAGE element.
- */
-function isImageElement(element: Element): element is HTMLImageElement {
-  return element.tagName === 'IMG';
+  // ─── Tidak dikenali ───
+  return null;
 }
 
 /**
- * Extracts properties from an IMG element.
- * Returns null if the image has no valid src (skip gracefully).
+ * Helper: clamp nilai ke dalam rentang [min, max].
+ * @param {number} value
+ * @param {number} min
+ * @param {number} max
+ * @returns {number}
  */
-function extractImageElement(element: HTMLImageElement): ImageElement | null {
-  const rect = element.getBoundingClientRect();
-  const src = element.src;
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+```
 
-  // Skip images without a source
-  if (!src || src === '') {
-    console.warn("[CodeToFrame] Skipping image with no src:", element);
-    return null;
-  }
+### Konversi ke Skala Figma (0–1)
+
+Saat membangun payload Figma, konversikan warna dari skala 0–255 ke 0–1:
+
+```javascript
+/**
+ * Mengonversi warna RGBA (skala 0-255) ke format Figma (skala 0-1).
+ * Digunakan saat membangun objek 'fills' atau 'strokes' untuk payload Figma.
+ *
+ * @param {{r: number, g: number, b: number, a: number}} color - Objek RGBA skala 0-255
+ * @returns {{r: number, g: number, b: number}} Objek RGB skala 0-1 (alpha ditangani terpisah)
+ *
+ * @example
+ * toFigmaRGB({ r: 59, g: 130, b: 246, a: 1 })
+ * // → { r: 0.231, g: 0.510, b: 0.965 }
+ */
+export function toFigmaRGB(color) {
+  if (!color) return { r: 0, g: 0, b: 0 };
 
   return {
-    type: "IMAGE",
-    x: rect.x,
-    y: rect.y,
-    width: rect.width,
-    height: rect.height,
-    imageUrl: src,
-    altText: element.alt || '',
+    r: parseFloat((clamp(color.r, 0, 255) / 255).toFixed(4)),
+    g: parseFloat((clamp(color.g, 0, 255) / 255).toFixed(4)),
+    b: parseFloat((clamp(color.b, 0, 255) / 255).toFixed(4)),
+  };
+}
+```
+
+### Pola Penggunaan di Pipeline
+
+```javascript
+// ── Di style-extractor.js ──
+const style = window.getComputedStyle(element);
+const bgColor = parseColor(style.backgroundColor);
+// bgColor = { r: 59, g: 130, b: 246, a: 1 } (skala 0-255)
+
+// ── Di figma-mapper.js (saat membangun payload) ──
+const figmaFills = [];
+if (bgColor && bgColor.a > 0) {
+  figmaFills.push({
+    type: 'SOLID',
+    color: toFigmaRGB(bgColor),
+    opacity: bgColor.a,           // Alpha tetap skala 0-1
+  });
+}
+```
+
+### Tabel Referensi Cepat Format Warna
+
+| Input CSS | `parseColor()` Output | `toFigmaRGB()` Output |
+|---|---|---|
+| `rgb(255, 0, 0)` | `{ r:255, g:0, b:0, a:1 }` | `{ r:1, g:0, b:0 }` |
+| `rgba(0, 128, 255, 0.5)` | `{ r:0, g:128, b:255, a:0.5 }` | `{ r:0, g:0.502, b:1 }` |
+| `#FF8800` | `{ r:255, g:136, b:0, a:1 }` | `{ r:1, g:0.533, b:0 }` |
+| `#F80` | `{ r:255, g:136, b:0, a:1 }` | `{ r:1, g:0.533, b:0 }` |
+| `transparent` | `{ r:0, g:0, b:0, a:0 }` | `{ r:0, g:0, b:0 }` |
+| `null` | `null` | `{ r:0, g:0, b:0 }` (default) |
+
+---
+
+## 2. 📐 Ekstraksi Dimensi & Geometri
+
+### Konsep Kunci: `getBoundingClientRect()`
+
+Method ini mengembalikan objek `DOMRect` yang berisi posisi dan ukuran elemen **relatif terhadap viewport** (area yang terlihat di layar, bukan seluruh halaman).
+
+```
+┌──────────────────────────────────────────────────────┐
+│  Browser Viewport (yang terlihat di layar)            │
+│                                                       │
+│    ┌──────────────────┐                               │
+│    │  Elemen DOM       │                               │
+│    │                   │                               │
+│    │  rect.left (= x)  ──────►                        │
+│    │  rect.top  (= y)  │                               │
+│    │                   │                               │
+│    │  rect.width ─────►│                               │
+│    │  rect.height      │                               │
+│    │  │                │                               │
+│    │  ▼                │                               │
+│    └──────────────────┘                               │
+│                                                       │
+└──────────────────────────────────────────────────────┘
+```
+
+### Pola Aman untuk Membaca Geometri
+
+```javascript
+/**
+ * Mengekstrak posisi dan dimensi elemen DOM secara aman.
+ * Mengembalikan koordinat ABSOLUT (terhadap dokumen, bukan viewport)
+ * dengan memperhitungkan scroll offset.
+ *
+ * @param {HTMLElement} element - Elemen DOM target
+ * @returns {{x: number, y: number, width: number, height: number}|null}
+ *
+ * @example
+ * const geo = extractGeometry(document.querySelector('.card'));
+ * // → { x: 120, y: 340, width: 300, height: 200 }
+ */
+export function extractGeometry(element) {
+  if (!element) return null;
+
+  const rect = element.getBoundingClientRect();
+
+  // Guard: elemen tanpa dimensi (width=0 atau height=0) biasanya tidak terlihat
+  if (rect.width === 0 && rect.height === 0) return null;
+
+  return {
+    // Posisi absolut di halaman (bukan viewport)
+    // rect.left/top adalah relatif viewport → tambahkan scroll offset
+    x: Math.round(rect.left + window.scrollX),
+    y: Math.round(rect.top + window.scrollY),
+
+    // Dimensi (selalu bulat dan minimal 1px)
+    width: Math.max(1, Math.round(rect.width)),
+    height: Math.max(1, Math.round(rect.height)),
+  };
+}
+```
+
+### ⚠️ Peringatan: Viewport vs Dokumen
+
+```
+                    ┌─── window.scrollY = 500px ───┐
+                    │                               │
+ ┌──────────────────┼───────────────────────────────┼──┐
+ │  Dokumen (total) │   ← Area yang sudah di-scroll │  │
+ │                  │                               │  │
+ │ ════════════════════════════════════════════════════ │
+ │                  │   ← Viewport mulai di sini    │  │
+ │                  │                               │  │
+ │    ┌─────────┐   │                               │  │
+ │    │ Elemen  │   │                               │  │
+ │    │         │   │ rect.top = 100px (dari viewport) │
+ │    └─────────┘   │ absoluteY = 100 + 500 = 600px│  │
+ │                  │                               │  │
+ │ ════════════════════════════════════════════════════ │
+ │                  │   ← Viewport berakhir di sini │  │
+ │                  │                               │  │
+ └──────────────────┴───────────────────────────────┴──┘
+```
+
+**Aturan penting:**
+- `rect.top` dan `rect.left` = posisi relatif terhadap **viewport** (berubah saat scroll).
+- Untuk posisi **absolut** di halaman: `absoluteY = rect.top + window.scrollY`.
+- Di CodeToFrame v2.0 kita menggunakan **posisi absolut** untuk root, lalu **posisi relatif** untuk children.
+
+### Menghitung Posisi Relatif (Child terhadap Parent)
+
+Di Figma, posisi children di dalam Frame selalu relatif terhadap sudut kiri atas Frame parent. Ini **berbeda** dari `getBoundingClientRect()` yang selalu relatif terhadap viewport.
+
+```javascript
+/**
+ * Menghitung posisi child relatif terhadap parent-nya.
+ *
+ * Kenapa ini perlu:
+ *   Di Figma, jika Frame parent berada di (100, 200),
+ *   dan child berada di (150, 250) secara absolut,
+ *   maka posisi child DI DALAM Frame = (50, 50).
+ *
+ * @param {DOMRect} childRect - Bounding rect dari child
+ * @param {DOMRect} parentRect - Bounding rect dari parent
+ * @returns {{x: number, y: number}}
+ */
+export function getRelativePosition(childRect, parentRect) {
+  return {
+    x: Math.round(childRect.left - parentRect.left),
+    y: Math.round(childRect.top - parentRect.top),
+  };
+}
+```
+
+### Contoh Lengkap: Nested Geometry
+
+```javascript
+// Parent div
+const parentRect = parentDiv.getBoundingClientRect();
+// parentRect = { left: 100, top: 200, width: 400, height: 300 }
+
+// Child div (di dalam parent)
+const childRect = childDiv.getBoundingClientRect();
+// childRect = { left: 150, top: 250, width: 200, height: 100 }
+
+// Posisi relatif child terhadap parent
+const relPos = getRelativePosition(childRect, parentRect);
+// relPos = { x: 50, y: 50 }
+
+// Di Figma:
+// Parent Frame: x=100, y=200, w=400, h=300
+//   └─ Child Frame: x=50, y=50, w=200, h=100  ← relatif!
+```
+
+---
+
+## 3. 📋 Injeksi Native Clipboard API
+
+### Konsep Kunci
+
+Figma mendukung paste dari clipboard yang mengandung konten HTML. Saat pengguna melakukan Ctrl+V di kanvas Figma, Figma memeriksa clipboard untuk data `text/html`. Jika ditemukan, Figma mengonversi HTML tersebut menjadi Frame dan Text nodes.
+
+### Kerangka Fungsi: `writeToClipboard(payload)`
+
+```javascript
+/**
+ * Menulis payload desain ke clipboard OS dalam format yang bisa
+ * dikenali Figma saat pengguna melakukan Ctrl+V.
+ *
+ * Strategi dual-MIME:
+ *   1. text/html  → HTML terstruktur dengan inline styles (untuk Figma native paste)
+ *   2. text/plain → JSON string (untuk fallback / debugging / plugin v1.0)
+ *
+ * @param {Object} payload - Objek ExtractionPayload dari figma-mapper
+ * @returns {Promise<{success: boolean, method: string, error?: string}>}
+ *
+ * @example
+ * const result = await writeToClipboard(payload);
+ * // → { success: true, method: 'native' }
+ * // → { success: true, method: 'fallback-text' }
+ * // → { success: false, error: 'Clipboard permission denied' }
+ */
+export async function writeToClipboard(payload) {
+  const jsonString = JSON.stringify(payload, null, 2);
+  const htmlString = buildHtmlFromTree(payload.rootNode);
+
+  // ─── Metode 1: ClipboardItem dengan dual MIME ───
+  try {
+    const clipboardItem = new ClipboardItem({
+      // Figma membaca ini saat paste → membuat Frame/Text nodes
+      'text/html': new Blob([htmlString], { type: 'text/html' }),
+      // Fallback — bisa di-paste ke text editor atau plugin v1.0
+      'text/plain': new Blob([jsonString], { type: 'text/plain' }),
+    });
+
+    await navigator.clipboard.write([clipboardItem]);
+    console.log('[CodeToFrame] Clipboard: native write berhasil.');
+    return { success: true, method: 'native' };
+
+  } catch (nativeError) {
+    console.warn('[CodeToFrame] Native clipboard.write() gagal:', nativeError.message);
+  }
+
+  // ─── Metode 2: Fallback ke writeText (JSON saja) ───
+  try {
+    await navigator.clipboard.writeText(jsonString);
+    console.log('[CodeToFrame] Clipboard: fallback writeText berhasil.');
+    return { success: true, method: 'fallback-text' };
+
+  } catch (textError) {
+    console.error('[CodeToFrame] Semua metode clipboard gagal:', textError.message);
+    return { success: false, method: 'none', error: textError.message };
+  }
+}
+```
+
+### Membangun HTML Payload untuk Figma
+
+Figma meng-parse HTML yang di-paste dan membuat nodes berdasarkan struktur DOM + inline styles. Semakin akurat inline styles kita, semakin akurat hasilnya di Figma.
+
+```javascript
+/**
+ * Mengonversi tree FigmaNode menjadi HTML string dengan inline styles.
+ * HTML ini akan dibaca Figma saat paste untuk membuat visual nodes.
+ *
+ * @param {Object} node - FigmaNode dari tree
+ * @returns {string} HTML string
+ */
+function buildHtmlFromTree(node) {
+  if (!node) return '';
+
+  // ─── TEXT node → <p> atau <span> ───
+  if (node.type === 'TEXT') {
+    const textStyle = buildInlineStyle({
+      'font-size': node.typography ? `${node.typography.fontSize}px` : '16px',
+      'font-family': node.typography ? node.typography.fontFamily : 'Inter, sans-serif',
+      'font-weight': node.typography ? String(node.typography.fontWeight) : '400',
+      'color': node.styles?.textColor
+        ? `rgb(${node.styles.textColor.r}, ${node.styles.textColor.g}, ${node.styles.textColor.b})`
+        : 'rgb(0,0,0)',
+      'line-height': node.typography?.lineHeight ? `${node.typography.lineHeight}px` : 'normal',
+      'letter-spacing': node.typography?.letterSpacing ? `${node.typography.letterSpacing}px` : 'normal',
+      'text-align': (node.typography?.textAlign || 'LEFT').toLowerCase(),
+    });
+    // Escape HTML entities di konten teks
+    const safeContent = escapeHtml(node.textContent || '');
+    return `<p style="${textStyle}">${safeContent}</p>`;
+  }
+
+  // ─── IMAGE node → <img> ───
+  if (node.type === 'IMAGE' && node.imageUrl) {
+    const imgStyle = buildInlineStyle({
+      'width': `${node.width}px`,
+      'height': `${node.height}px`,
+      'display': 'block',
+    });
+    return `<img src="${escapeHtml(node.imageUrl)}" style="${imgStyle}" />`;
+  }
+
+  // ─── FRAME / container → <div> dengan children ───
+  const containerStyle = buildInlineStyle({
+    'width': `${node.width}px`,
+    'height': `${node.height}px`,
+    'background-color': node.styles?.backgroundColor
+      ? `rgba(${node.styles.backgroundColor.r}, ${node.styles.backgroundColor.g}, ${node.styles.backgroundColor.b}, ${node.styles.backgroundColor.a ?? 1})`
+      : undefined,
+    'border-radius': formatBorderRadius(node.styles?.borderRadius),
+    'border': formatBorder(node.styles?.border),
+    'opacity': node.styles?.opacity !== undefined && node.styles.opacity < 1
+      ? String(node.styles.opacity) : undefined,
+    'overflow': node.styles?.overflow === 'hidden' ? 'hidden' : undefined,
+    // Flex layout
+    'display': node.layout?.mode === 'FLEX' ? 'flex' : undefined,
+    'flex-direction': node.layout?.mode === 'FLEX'
+      ? (node.layout.direction === 'COLUMN' ? 'column' : 'row') : undefined,
+    'gap': node.layout?.mode === 'FLEX' && node.layout.gap > 0
+      ? `${node.layout.gap}px` : undefined,
+    'padding': formatPadding(node.layout?.padding),
+  });
+
+  // Rekursif: bangun HTML untuk setiap child
+  const childrenHtml = (node.children || [])
+    .map(child => buildHtmlFromTree(child))
+    .join('\n');
+
+  return `<div style="${containerStyle}">\n${childrenHtml}\n</div>`;
+}
+
+/**
+ * Membangun string inline style dari objek key-value.
+ * Mengabaikan properti dengan value undefined/null/empty.
+ */
+function buildInlineStyle(properties) {
+  return Object.entries(properties)
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .map(([key, value]) => `${key}: ${value}`)
+    .join('; ');
+}
+
+/**
+ * Escape karakter khusus HTML untuk mencegah XSS di konten teks.
+ */
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+/** Helper: format border-radius ke CSS string */
+function formatBorderRadius(radius) {
+  if (!radius) return undefined;
+  const { topLeft, topRight, bottomRight, bottomLeft } = radius;
+  if (topLeft === 0 && topRight === 0 && bottomRight === 0 && bottomLeft === 0) return undefined;
+  if (topLeft === topRight && topRight === bottomRight && bottomRight === bottomLeft) {
+    return `${topLeft}px`;
+  }
+  return `${topLeft}px ${topRight}px ${bottomRight}px ${bottomLeft}px`;
+}
+
+/** Helper: format border ke CSS string */
+function formatBorder(border) {
+  if (!border || border.width === 0 || border.style === 'none') return undefined;
+  const { r, g, b } = border.color || { r: 0, g: 0, b: 0 };
+  return `${border.width}px ${border.style} rgb(${r}, ${g}, ${b})`;
+}
+
+/** Helper: format padding ke CSS string */
+function formatPadding(padding) {
+  if (!padding) return undefined;
+  const { top, right, bottom, left } = padding;
+  if (top === 0 && right === 0 && bottom === 0 && left === 0) return undefined;
+  return `${top}px ${right}px ${bottom}px ${left}px`;
+}
+```
+
+### Tipe MIME yang Digunakan
+
+| Tipe MIME | Tujuan | Siapa yang Membaca |
+|---|---|---|
+| `text/html` | HTML terstruktur dengan inline styles | Figma (saat Ctrl+V di canvas) |
+| `text/plain` | JSON string mentah | Plugin v1.0, text editor, debugging |
+
+### Permission yang Diperlukan
+
+```json
+{
+  "permissions": ["clipboardWrite"]
+}
+```
+
+> ⚠️ **Catatan:** `navigator.clipboard.write()` memerlukan halaman web berada dalam konteks yang aman (HTTPS atau localhost). Di halaman HTTP biasa, gunakan fallback `writeText()`.
+
+### Tabel Error Handling Clipboard
+
+| Error | Penyebab | Solusi |
+|---|---|---|
+| `NotAllowedError` | User belum memberikan izin clipboard | Tampilkan pesan untuk klik "Allow" di prompt browser |
+| `SecurityError` | Halaman non-HTTPS | Fallback ke `writeText()` |
+| `TypeError: ClipboardItem is not defined` | Browser lama | Fallback ke `writeText()` |
+| `DOMException: Document is not focused` | Popup kehilangan focus | Pastikan aksi clipboard dipicu dari event handler user (click) |
+
+---
+
+## 4. 📦 Skema Node Figma (JSON Payload)
+
+### Struktur Payload Lengkap
+
+Berikut adalah bentuk JSON yang dihasilkan oleh pipeline ekstraksi. Ini adalah "kontrak data" antara `figma-mapper.js` dan `clipboard-writer.js`.
+
+```javascript
+// Payload tingkat atas (root)
+{
+  "version": "2.0",
+  "sourceUrl": "https://example.com/page",
+  "viewport": {
+    "width": 1440,
+    "height": 900,
+    "scrollX": 0,
+    "scrollY": 0
+  },
+  "rootNode": { /* FigmaNode — lihat di bawah */ }
+}
+```
+
+### Contoh: Node FRAME (Container)
+
+Setiap `<div>`, `<section>`, `<header>`, dll. menjadi FRAME:
+
+```javascript
+{
+  "type": "FRAME",
+  "name": "div.hero-section",           // Smart naming dari tag/class/id
+  "x": 0,
+  "y": 0,
+  "width": 1440,
+  "height": 600,
+  "styles": {
+    "backgroundColor": { "r": 59, "g": 130, "b": 246, "a": 1 },
+    "backgroundGradient": null,          // null jika bukan gradient
+    "backgroundImageUrl": null,
+    "border": { "width": 0, "color": { "r": 0, "g": 0, "b": 0, "a": 0 }, "style": "none" },
+    "borderRadius": { "topLeft": 12, "topRight": 12, "bottomRight": 12, "bottomLeft": 12 },
+    "boxShadow": [
+      {
+        "type": "DROP_SHADOW",
+        "offsetX": 0,
+        "offsetY": 4,
+        "blur": 6,
+        "spread": -1,
+        "color": { "r": 0, "g": 0, "b": 0, "a": 0.1 }
+      }
+    ],
+    "opacity": 1,
+    "overflow": "hidden"
+  },
+  "layout": {                            // Hanya ada jika display: flex
+    "mode": "FLEX",
+    "direction": "COLUMN",
+    "gap": 16,
+    "padding": { "top": 24, "right": 32, "bottom": 24, "left": 32 },
+    "justifyContent": "CENTER",
+    "alignItems": "CENTER",
+    "wrap": false
+  },
+  "children": [
+    { /* child FigmaNode 1 */ },
+    { /* child FigmaNode 2 */ }
+  ]
+}
+```
+
+### Contoh: Node TEXT
+
+Setiap `<p>`, `<h1>`–`<h6>`, `<span>`, `<a>`, dll. menjadi TEXT:
+
+```javascript
+{
+  "type": "TEXT",
+  "name": "h1.hero-title",
+  "x": 50,                              // Relatif terhadap parent Frame
+  "y": 100,
+  "width": 600,
+  "height": 56,
+  "textContent": "Welcome to CodeToFrame",
+  "typography": {
+    "fontFamily": "Inter",
+    "fontSize": 48,
+    "fontWeight": 700,
+    "fontStyle": "Bold",                 // Nama style Figma
+    "lineHeight": 56,                    // Dalam pixel
+    "letterSpacing": -0.5,               // Dalam pixel
+    "textAlign": "LEFT",                 // "LEFT" | "CENTER" | "RIGHT" | "JUSTIFIED"
+    "textDecoration": "NONE"             // "NONE" | "UNDERLINE" | "STRIKETHROUGH"
+  },
+  "styles": {
+    "textColor": { "r": 255, "g": 255, "b": 255, "a": 1 },
+    "opacity": 1
+  },
+  "children": []                         // TEXT node biasanya tidak punya children
+}
+```
+
+### Contoh: Node IMAGE
+
+Setiap `<img>` menjadi IMAGE:
+
+```javascript
+{
+  "type": "IMAGE",
+  "name": "img.hero-banner",
+  "x": 0,
+  "y": 0,
+  "width": 800,
+  "height": 400,
+  "imageUrl": "https://example.com/images/hero.jpg",
+  "styles": {
+    "borderRadius": { "topLeft": 8, "topRight": 8, "bottomRight": 8, "bottomLeft": 8 },
+    "opacity": 1
+  },
+  "children": []
+}
+```
+
+### Contoh: Node VECTOR (SVG)
+
+Setiap `<svg>` inline menjadi VECTOR:
+
+```javascript
+{
+  "type": "VECTOR",
+  "name": "svg.icon-arrow",
+  "x": 500,
+  "y": 200,
+  "width": 24,
+  "height": 24,
+  "svgContent": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\"><path d=\"M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z\"/></svg>",
+  "styles": {
+    "opacity": 1
+  },
+  "children": []
+}
+```
+
+### Ringkasan Tipe Node
+
+| Tipe | Tag HTML Sumber | Properti Khas | Children? |
+|---|---|---|---|
+| `FRAME` | `div`, `section`, `header`, `nav`, `form`, dll. | `styles`, `layout` | ✅ Ya (bersarang) |
+| `TEXT` | `p`, `h1-h6`, `span`, `a`, `strong`, dll. | `textContent`, `typography` | ❌ Biasanya tidak |
+| `IMAGE` | `<img>`, elemen dengan `background-image` | `imageUrl` | ❌ Tidak |
+| `VECTOR` | `<svg>` inline | `svgContent` | ❌ Tidak |
+
+---
+
+## 5. 🔧 Penanganan Properti CSS Kompleks
+
+### 5.1 Border-Radius
+
+**Tantangan:** CSS `border-radius` bisa berupa satu nilai (`8px`) atau empat nilai terpisah per corner. Browser mengembalikan longhand properties.
+
+```javascript
+/**
+ * Mengekstrak border-radius per corner dari computed style.
+ *
+ * @param {CSSStyleDeclaration} style - Hasil getComputedStyle()
+ * @param {number} elWidth - Lebar elemen (untuk konversi persentase)
+ * @param {number} elHeight - Tinggi elemen (untuk konversi persentase)
+ * @returns {{topLeft: number, topRight: number, bottomRight: number, bottomLeft: number}}
+ *
+ * @example
+ * // CSS: border-radius: 8px
+ * extractBorderRadius(style, 200, 100)
+ * // → { topLeft: 8, topRight: 8, bottomRight: 8, bottomLeft: 8 }
+ *
+ * // CSS: border-radius: 50% (lingkaran)
+ * extractBorderRadius(style, 200, 100)
+ * // → { topLeft: 50, topRight: 50, bottomRight: 50, bottomLeft: 50 }
+ */
+export function extractBorderRadius(style, elWidth, elHeight) {
+  // Browser mengembalikan per-corner sebagai longhand property
+  return {
+    topLeft:     parseRadiusValue(style.borderTopLeftRadius, elWidth, elHeight),
+    topRight:    parseRadiusValue(style.borderTopRightRadius, elWidth, elHeight),
+    bottomRight: parseRadiusValue(style.borderBottomRightRadius, elWidth, elHeight),
+    bottomLeft:  parseRadiusValue(style.borderBottomLeftRadius, elWidth, elHeight),
   };
 }
 
-// In the main traversal loop:
-if (isImageElement(el)) {
-  const imageEl = extractImageElement(el);
-  if (imageEl) elements.push(imageEl);
+/**
+ * Parse satu nilai radius — bisa berupa "8px" atau "50%".
+ * Jika persentase, konversi ke pixel berdasarkan dimensi terkecil.
+ */
+function parseRadiusValue(raw, width, height) {
+  if (!raw || raw === '0px') return 0;
+
+  // Kasus: persentase (misal "50%")
+  if (raw.endsWith('%')) {
+    const percent = parseFloat(raw) / 100;
+    // Figma tidak mendukung radius persentase — konversi ke pixel
+    // Gunakan dimensi terkecil sebagai referensi
+    return Math.round(Math.min(width, height) * percent);
+  }
+
+  // Kasus: pixel (misal "8px")
+  return Math.round(parseFloat(raw)) || 0;
+}
+```
+
+### 5.2 Box-Shadow
+
+**Tantangan:** CSS `box-shadow` bisa berisi multiple shadows yang dipisahkan koma, dan warna bisa di awal atau akhir string. Contoh: `rgba(0,0,0,0.1) 0px 4px 6px -1px, rgba(0,0,0,0.06) 0px 2px 4px -1px`.
+
+```javascript
+/**
+ * Mem-parse CSS box-shadow menjadi array objek shadow.
+ *
+ * Format CSS: [inset?] <offsetX> <offsetY> [<blur>] [<spread>] <color>
+ * Catatan: Browser bisa mengembalikan warna di AWAL atau AKHIR.
+ *
+ * @param {string} raw - String box-shadow dari getComputedStyle()
+ * @returns {Array<{type: string, offsetX: number, offsetY: number, blur: number, spread: number, color: Object}>}
+ *
+ * @example
+ * parseBoxShadow('rgba(0,0,0,0.1) 0px 4px 6px -1px')
+ * // → [{ type: 'DROP_SHADOW', offsetX: 0, offsetY: 4, blur: 6, spread: -1, color: {r:0,g:0,b:0,a:0.1} }]
+ *
+ * parseBoxShadow('inset 0px 2px 4px rgba(0,0,0,0.2)')
+ * // → [{ type: 'INNER_SHADOW', offsetX: 0, offsetY: 2, blur: 4, spread: 0, color: {r:0,g:0,b:0,a:0.2} }]
+ */
+export function parseBoxShadow(raw) {
+  if (!raw || raw === 'none') return [];
+
+  const shadows = [];
+
+  // ─── Langkah 1: Split by koma, tapi abaikan koma di dalam rgba() ───
+  // Regex: split di koma yang TIDAK berada di dalam tanda kurung
+  const parts = raw.split(/,(?![^(]*\))/);
+
+  for (const part of parts) {
+    try {
+      const trimmed = part.trim();
+
+      // ─── Langkah 2: Deteksi inset ───
+      const isInset = trimmed.includes('inset');
+      const cleaned = trimmed.replace(/inset/g, '').trim();
+
+      // ─── Langkah 3: Ekstrak warna (rgb/rgba di mana pun posisinya) ───
+      const colorMatch = cleaned.match(/rgba?\([^)]+\)/);
+      const color = colorMatch
+        ? parseColor(colorMatch[0])
+        : { r: 0, g: 0, b: 0, a: 0.25 };  // Default shadow gelap
+
+      // ─── Langkah 4: Ekstrak angka (offsetX, offsetY, blur, spread) ───
+      const withoutColor = cleaned.replace(/rgba?\([^)]+\)/, '').trim();
+      const numbers = withoutColor.match(/-?[\d.]+/g);
+      const values = numbers ? numbers.map(Number) : [0, 0, 0, 0];
+
+      shadows.push({
+        type: isInset ? 'INNER_SHADOW' : 'DROP_SHADOW',
+        offsetX: values[0] || 0,
+        offsetY: values[1] || 0,
+        blur:    Math.max(0, values[2] || 0),  // Blur tidak boleh negatif
+        spread:  values[3] || 0,
+        color:   color,
+      });
+    } catch (err) {
+      // Skip shadow yang gagal di-parse — jangan hentikan loop
+      console.warn('[CodeToFrame] Gagal parse satu shadow, skip:', part, err.message);
+      continue;
+    }
+  }
+
+  return shadows;
+}
+```
+
+### 5.3 Border (Width, Color, Style)
+
+**Tantangan:** CSS border bisa berbeda di setiap sisi. Untuk simplisitas, ambil sisi terbesar.
+
+```javascript
+/**
+ * Mengekstrak properti border dari computed style.
+ * Jika border berbeda di setiap sisi, ambil sisi dengan width terbesar.
+ *
+ * @param {CSSStyleDeclaration} style
+ * @returns {{width: number, color: Object, style: string}}
+ *
+ * @example
+ * extractBorder(style)
+ * // → { width: 2, color: { r: 229, g: 231, b: 235, a: 1 }, style: 'solid' }
+ */
+export function extractBorder(style) {
+  const DEFAULT = { width: 0, color: { r: 0, g: 0, b: 0, a: 0 }, style: 'none' };
+
+  if (!style) return DEFAULT;
+
+  // Baca border per sisi
+  const sides = [
+    { width: parseFloat(style.borderTopWidth)    || 0, color: style.borderTopColor,    style: style.borderTopStyle },
+    { width: parseFloat(style.borderRightWidth)  || 0, color: style.borderRightColor,  style: style.borderRightStyle },
+    { width: parseFloat(style.borderBottomWidth) || 0, color: style.borderBottomColor, style: style.borderBottomStyle },
+    { width: parseFloat(style.borderLeftWidth)   || 0, color: style.borderLeftColor,   style: style.borderLeftStyle },
+  ];
+
+  // Ambil sisi dengan width terbesar (dominant border)
+  const dominant = sides.reduce((max, side) => side.width > max.width ? side : max, sides[0]);
+
+  // Jika tidak ada border sama sekali
+  if (dominant.width === 0 || dominant.style === 'none') return DEFAULT;
+
+  return {
+    width: Math.round(dominant.width),
+    color: parseColor(dominant.color) || DEFAULT.color,
+    style: dominant.style || 'solid',
+  };
+}
+```
+
+### 5.4 Linear-Gradient
+
+```javascript
+/**
+ * Mem-parse CSS linear-gradient menjadi objek gradient data.
+ *
+ * @param {string} raw - String backgroundImage dari getComputedStyle()
+ * @returns {{angleDeg: number, colorStops: Array<{color: Object, position: number}>}|null}
+ *
+ * @example
+ * parseLinearGradient('linear-gradient(135deg, #667eea 0%, #764ba2 100%)')
+ * // → { angleDeg: 135, colorStops: [{color: {r:102,...}, position: 0}, {color: {r:118,...}, position: 1}] }
+ */
+export function parseLinearGradient(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+
+  const match = raw.match(/linear-gradient\((.+)\)/);
+  if (!match) return null;
+
+  const inner = match[1];
+  // Split di koma, tapi abaikan koma di dalam rgb()/rgba()
+  const parts = inner.split(/,(?![^(]*\))/);
+
+  let angleDeg = 180;  // Default: atas ke bawah
+  let startIndex = 0;
+
+  // ─── Parse arah/angle ───
+  const firstPart = parts[0].trim();
+
+  if (firstPart.endsWith('deg')) {
+    angleDeg = parseFloat(firstPart);
+    startIndex = 1;
+  } else if (firstPart.startsWith('to ')) {
+    const dirMap = {
+      'to top': 0,       'to right': 90,
+      'to bottom': 180,  'to left': 270,
+      'to top right': 45,     'to bottom right': 135,
+      'to bottom left': 225,  'to top left': 315,
+    };
+    angleDeg = dirMap[firstPart] !== undefined ? dirMap[firstPart] : 180;
+    startIndex = 1;
+  }
+
+  // ─── Parse color stops ───
+  const colorStops = [];
+  const totalStops = parts.length - startIndex;
+
+  for (let i = startIndex; i < parts.length; i++) {
+    const stopStr = parts[i].trim();
+
+    // Ekstrak warna
+    const colorMatch = stopStr.match(/rgba?\([^)]+\)|#[0-9a-fA-F]{3,8}/);
+    if (!colorMatch) continue;
+
+    const color = parseColor(colorMatch[0]);
+    if (!color) continue;
+
+    // Ekstrak posisi (misal "30%")
+    const posMatch = stopStr.match(/([\d.]+)%/);
+    const position = posMatch
+      ? parseFloat(posMatch[1]) / 100       // Persen → 0-1
+      : (i - startIndex) / (totalStops - 1); // Auto-distribute merata
+
+    colorStops.push({ color, position: clamp(position, 0, 1) });
+  }
+
+  if (colorStops.length < 2) return null;  // Gradient butuh minimal 2 stops
+
+  return { angleDeg, colorStops };
 }
 ```
 
 ---
 
-#### Step 4 — Update the Renderer (Figma Plugin)
+## 6. 🛡️ Pola Defensive Programming
 
-**File to modify:**
-- `figma-plugin/src/plugin/renderer.ts`
+### Pola 1: Guard Clause di Awal Fungsi
 
-**Action:** Add a render function for the new element type.
+```javascript
+// ✅ BENAR — return awal jika input tidak valid
+function extractStyles(element) {
+  if (!element) return getDefaultStyles();
+  if (!(element instanceof HTMLElement)) return getDefaultStyles();
 
-**Checklist:**
-- [ ] Create a new `render<Type>` function (e.g., `renderImage`).
-- [ ] Use the correct `figma.create*()` method for the target node type.
-- [ ] Set position (`x`, `y`) and dimensions (`resize(width, height)`).
-- [ ] Apply type-specific properties using the Figma API.
-- [ ] Add the new type to the main dispatch logic in `controller.ts` (the `switch` or `if/else` that routes elements to render functions).
+  const style = window.getComputedStyle(element);
+  if (!style) return getDefaultStyles();
 
-**Update the dispatcher in `controller.ts`:**
+  // ... logika utama di sini
+}
+```
 
-```typescript
-// In controller.ts — add a new case to the element dispatch
+### Pola 2: Try-Catch per Elemen dalam Loop
 
-for (const element of data.elements) {
-  switch (element.type) {
-    case "RECTANGLE":
-      renderRectangle(element);
-      break;
-    case "TEXT":
-      await renderText(element);
-      break;
-    case "IMAGE":            // ← NEW
-      await renderImage(element);
-      break;
-    default:
-      console.warn("[CodeToFrame] Unknown element type, skipping:", (element as { type: string }).type);
+```javascript
+// ✅ BENAR — satu elemen gagal tidak menghentikan seluruh loop
+for (const child of element.children) {
+  try {
+    const childNode = traverseDOM(child, parentRect, depth + 1, counter);
+    if (childNode) {
+      result.children.push(childNode);
+    }
+  } catch (error) {
+    console.warn('[CodeToFrame] Skip elemen:', child.tagName, error.message);
+    continue;  // Lanjut ke elemen berikutnya
   }
 }
 ```
 
----
+### Pola 3: Fallback Bertingkat
 
-#### Step 5 — Update Documentation
+```javascript
+// ✅ BENAR — coba cara terbaik dulu, fallback bertahap
+function getFontFamily(computedStyle) {
+  // Tingkat 1: Baca dari computed style
+  const rawFamily = computedStyle.fontFamily;
+  if (rawFamily) {
+    const firstFont = rawFamily.split(',')[0].trim().replace(/['"]/g, '');
+    if (firstFont) return firstFont;
+  }
 
-**Files to update:**
-- `PRD.md` — Add the new element type to the "Elemen yang Diekstrak" table in Section 5.1 and add its properties to Section 5.2.
-- `AGENTS.md` — Move the element from the "NOT Supported" table to the "Supported" table in Section 2 (if applicable).
-- `ARCHITECTURE.md` — If the data flow changed (e.g., new async steps for image download), update Section 5.
+  // Tingkat 2: Baca dari atribut style inline
+  const inlineFont = computedStyle.getPropertyValue('font-family');
+  if (inlineFont) return inlineFont.split(',')[0].trim().replace(/['"]/g, '');
 
----
-
-### VERIFICATION:
-
-```bash
-# 1. Type-check both projects
-cd browser-extension && npx tsc --noEmit
-cd figma-plugin && npx tsc --noEmit
-
-# 2. Build both projects
-cd browser-extension && npm run build
-cd figma-plugin && npm run build
+  // Tingkat 3: Default yang aman
+  console.warn('[CodeToFrame] Tidak bisa membaca font-family, menggunakan default.');
+  return 'Inter';
+}
 ```
 
-- [ ] New interface exists in both `schema.ts` files (identical content).
-- [ ] `FrameElement` union type includes the new element interface.
-- [ ] Extractor detects the new element type and outputs valid JSON.
-- [ ] Renderer creates the correct Figma node with correct properties.
-- [ ] Dispatcher in `controller.ts` handles the new `type` string.
-- [ ] Unknown/unsupported elements are still skipped gracefully (no regressions).
-- [ ] No TypeScript errors in either project.
-- [ ] Documentation updated.
+### Pola 4: Safe JSON Parse
 
----
+```javascript
+// ✅ BENAR — bungkus JSON.parse dalam try-catch
+function safeJsonParse(jsonString) {
+  if (!jsonString || typeof jsonString !== 'string') return null;
 
-## SKILL 3: Testing & Building the Project
-
-### IF USER ASKS TO:
-
-> "Build the project", "Check for errors", "Run type checking", "Prepare for deployment", or "Make sure everything compiles"
-
-### THEN EXECUTE THESE STEPS:
-
----
-
-#### Step 1 — Pre-Build: Verify Dependencies Are Installed
-
-Run `npm install` in both project directories to ensure all dependencies are up to date.
-
-```bash
-# Install dependencies for browser extension
-cd browser-extension && npm install
-
-# Install dependencies for Figma plugin
-cd figma-plugin && npm install
+  try {
+    return JSON.parse(jsonString);
+  } catch (error) {
+    console.error('[CodeToFrame] Gagal parse JSON:', error.message);
+    return null;
+  }
+}
 ```
 
-**Expected output:** No errors. If there are peer dependency warnings, they are usually safe to ignore unless they mention TypeScript or Vite.
+### Pola 5: Validasi Tipe Sebelum Aritmatika
 
----
-
-#### Step 2 — Type-Check: Catch TypeScript Errors Before Building
-
-Run the TypeScript compiler in check-only mode (`--noEmit`) to find type errors **without generating output files**.
-
-```bash
-# Type-check browser extension
-cd browser-extension && npx tsc --noEmit
-
-# Type-check Figma plugin
-cd figma-plugin && npx tsc --noEmit
-```
-
-**Expected output:** No output = no errors. ✅
-
-**If there ARE errors:**
-- Read each error message carefully.
-- Fix errors in this priority order:
-  1. `schema.ts` type mismatches (contract errors — highest priority)
-  2. Import/export errors (missing or incorrect paths)
-  3. Type annotation errors (wrong types assigned)
-  4. Unused variable warnings (lowest priority, but still fix them)
-- After fixing, re-run `npx tsc --noEmit` to confirm zero errors.
-
-> **⚠️ IMPORTANT:** Do NOT proceed to Step 3 if there are TypeScript errors. Fix them first.
-
----
-
-#### Step 3 — Build: Browser Extension
-
-```bash
-cd browser-extension && npm run build
-```
-
-**What this does:**
-- Vite bundles the TypeScript source files into JavaScript.
-- Output goes to `browser-extension/dist/`.
-- The `public/` folder (including `manifest.json` and `icons/`) is copied to `dist/` as-is.
-
-**Expected output:** Build completes with no errors. The `dist/` folder should contain:
-```
-browser-extension/dist/
-├── manifest.json          # Copied from public/
-├── icons/                 # Copied from public/
-├── popup.html             # Bundled popup
-├── popup.js               # Bundled popup script
-├── content.js             # Bundled content script
-└── service-worker.js      # Bundled background script (if applicable)
-```
-
-**If the build fails:**
-- Check for syntax errors in `.ts` files.
-- Check `vite.config.ts` for misconfigured entry points.
-- Ensure `manifest.json` references the correct output file names.
-
----
-
-#### Step 4 — Build: Figma Plugin
-
-```bash
-cd figma-plugin && npm run build
-```
-
-**What this does:**
-- TypeScript compiler (or bundler) compiles `.ts` files to `.js`.
-- Output goes to `figma-plugin/dist/`.
-
-**Expected output:** Build completes with no errors. The `dist/` folder should contain:
-```
-figma-plugin/dist/
-├── plugin/
-│   └── controller.js      # Compiled plugin sandbox code
-└── ui/
-    ├── ui.html             # Plugin UI (may be bundled inline)
-    └── ui.css              # Plugin styles (may be inlined)
-```
-
-**If the build fails:**
-- Check for Figma API usage errors (e.g., calling `document` in sandbox code).
-- Verify `manifest.json` paths point to correct `dist/` output locations.
-
----
-
-#### Step 5 — Post-Build: Verify Manifest References
-
-After building, confirm that manifest files point to files that actually exist in `dist/`.
-
-**For Browser Extension** — check `browser-extension/dist/manifest.json`:
-```bash
-# Verify that files referenced in manifest.json exist
-cat browser-extension/dist/manifest.json
-# Then check each file path listed under "content_scripts", "background", "action" exists in dist/
-```
-
-**For Figma Plugin** — check `figma-plugin/manifest.json`:
-```bash
-# Verify that "main" and "ui" paths exist
-cat figma-plugin/manifest.json
-# Then check that dist/plugin/controller.js and dist/ui/ui.html exist
+```javascript
+// ✅ BENAR — pastikan tipe benar sebelum operasi matematika
+function calculateRelativePosition(childValue, parentValue) {
+  const child = typeof childValue === 'number' ? childValue : 0;
+  const parent = typeof parentValue === 'number' ? parentValue : 0;
+  return Math.round(child - parent);
+}
 ```
 
 ---
 
-#### Step 6 — (Optional) Load and Smoke Test
+## 7. 📖 Referensi Cepat API
 
-If the user wants to verify the build works end-to-end:
+### DOM API yang Sering Digunakan
 
-**Browser Extension:**
-1. Open Chrome → `chrome://extensions/`
-2. Enable "Developer mode" (toggle in top-right)
-3. Click "Load unpacked" → select `browser-extension/dist/`
-4. Navigate to any web page → click the CodeToFrame extension icon
-5. Verify the popup opens without errors
+| Method / Property | Return Type | Kapan Digunakan |
+|---|---|---|
+| `element.getBoundingClientRect()` | `DOMRect` | Ambil posisi & ukuran elemen |
+| `window.getComputedStyle(el)` | `CSSStyleDeclaration` | Baca semua CSS property yang di-resolve browser |
+| `element.children` | `HTMLCollection` | Iterasi child elements (bukan text nodes) |
+| `element.tagName` | `string` (uppercase) | Klasifikasi tipe elemen: `"DIV"`, `"P"`, `"IMG"` |
+| `element.classList` | `DOMTokenList` | Ambil daftar class: `["card", "shadow-lg"]` |
+| `element.id` | `string` | Ambil ID elemen |
+| `element.innerText` | `string` | Ambil teks yang terlihat (skip hidden elements) |
+| `element.outerHTML` | `string` | Ambil HTML mentah termasuk tag (untuk SVG extraction) |
+| `element.currentSrc` | `string` | URL gambar yang sedang ditampilkan (untuk `<img>`) |
+| `window.scrollX / scrollY` | `number` | Offset scroll saat ini |
+| `window.innerWidth / innerHeight` | `number` | Ukuran viewport |
 
-**Figma Plugin:**
-1. Open Figma Desktop
-2. Go to **Plugins** → **Development** → **Import plugin from manifest...**
-3. Select `figma-plugin/manifest.json`
-4. Open a Figma file → run the CodeToFrame plugin
-5. Verify the plugin UI opens without errors
+### Properti `getComputedStyle()` yang Diekstrak
+
+| CSS Property | Computed Style Key | Catatan |
+|---|---|---|
+| Background color | `style.backgroundColor` | Selalu `rgb()` atau `rgba()` |
+| Background image/gradient | `style.backgroundImage` | `"none"`, `"url(...)"`, atau `"linear-gradient(...)"` |
+| Border width (per sisi) | `style.borderTopWidth`, dll. | Selalu berupa pixel string `"2px"` |
+| Border color (per sisi) | `style.borderTopColor`, dll. | Selalu `rgb()` atau `rgba()` |
+| Border style (per sisi) | `style.borderTopStyle`, dll. | `"solid"`, `"dashed"`, `"none"` |
+| Border radius (per corner) | `style.borderTopLeftRadius`, dll. | `"8px"` atau `"50%"` |
+| Box shadow | `style.boxShadow` | String kompleks, bisa multiple |
+| Opacity | `style.opacity` | String `"0.5"` — perlu `parseFloat` |
+| Overflow | `style.overflow` | `"visible"`, `"hidden"`, `"auto"`, `"scroll"` |
+| Display | `style.display` | `"block"`, `"flex"`, `"none"`, dll. |
+| Flex direction | `style.flexDirection` | `"row"`, `"column"`, dll. |
+| Justify content | `style.justifyContent` | `"flex-start"`, `"center"`, dll. |
+| Align items | `style.alignItems` | `"stretch"`, `"center"`, dll. |
+| Gap | `style.gap` | `"16px"` atau `"16px 8px"` |
+| Padding (per sisi) | `style.paddingTop`, dll. | Selalu pixel |
+| Font family | `style.fontFamily` | `"'Inter', sans-serif"` — perlu extract first |
+| Font size | `style.fontSize` | `"16px"` — perlu `parseFloat` |
+| Font weight | `style.fontWeight` | `"400"`, `"700"` — resolved ke angka |
+| Line height | `style.lineHeight` | `"24px"`, `"1.5"` (unitless), atau `"normal"` |
+| Letter spacing | `style.letterSpacing` | `"0.5px"` atau `"normal"` |
+| Text align | `style.textAlign` | `"left"`, `"center"`, dll. |
+| Text decoration | `style.textDecorationLine` | `"underline"`, `"line-through"`, `"none"` |
+| Color (teks) | `style.color` | Warna teks, selalu `rgb()`/`rgba()` |
+| Visibility | `style.visibility` | `"visible"`, `"hidden"` |
+| Position | `style.position` | `"static"`, `"relative"`, `"absolute"`, `"fixed"` |
+
+### Chrome Extension API yang Digunakan
+
+| API | Di Mana | Untuk Apa |
+|---|---|---|
+| `chrome.runtime.onMessage` | `entry.js` (content script) | Menerima pesan dari popup |
+| `chrome.tabs.query()` | `popup.js` | Mendapatkan tab aktif |
+| `chrome.tabs.sendMessage()` | `popup.js` | Mengirim pesan ke content script |
+| `chrome.scripting.executeScript()` | `popup.js` (alternatif) | Menjalankan script di tab aktif |
 
 ---
 
-### VERIFICATION:
-
-Summary checklist for the entire build process:
-
-| Step | Check | Command | Pass Criteria |
-|:---:|---|---|---|
-| 1 | Dependencies installed | `npm install` (both dirs) | No errors |
-| 2 | TypeScript type-check | `npx tsc --noEmit` (both dirs) | Zero errors, zero output |
-| 3 | Extension build | `npm run build` (extension) | `dist/` folder populated |
-| 4 | Plugin build | `npm run build` (plugin) | `dist/` folder populated |
-| 5 | Manifest paths valid | Manual check | All referenced files exist |
-| 6 | Smoke test (optional) | Load in Chrome + Figma | UI opens without console errors |
-
----
-
-## Quick Reference: Files Modified Per Skill
-
-This table shows which files are touched by each skill, making it easy to plan your changes:
-
-| File | Skill 1 (CSS Property) | Skill 2 (Element Type) | Skill 3 (Build) |
-|---|:---:|:---:|:---:|
-| `browser-extension/src/types/schema.ts` | ✏️ Modify | ✏️ Modify | — |
-| `figma-plugin/src/types/schema.ts` | ✏️ Modify | ✏️ Modify | — |
-| `browser-extension/src/content/extractor.ts` | ✏️ Modify | ✏️ Modify | — |
-| `figma-plugin/src/plugin/renderer.ts` | ✏️ Modify | ✏️ Modify | — |
-| `figma-plugin/src/plugin/controller.ts` | — | ✏️ Modify | — |
-| `PRD.md` | ✏️ Update | ✏️ Update | — |
-| `AGENTS.md` | ✏️ Update | ✏️ Update | — |
-| `ARCHITECTURE.md` | — | ✏️ Maybe | — |
-| `package.json` (both) | — | — | 📖 Read |
-| `tsconfig.json` (both) | — | — | 📖 Read |
-| `vite.config.ts` | — | — | 📖 Read |
-| `manifest.json` (both) | — | — | ✅ Verify |
-
----
-
-*End of AI Workflow Procedures.*
+*Dokumen ini adalah referensi teknis untuk implementasi CodeToFrame v2.0. Gunakan potongan kode di atas sebagai titik awal, adaptasikan sesuai konteks tugas di `TODO.md`. Jika ragu, tanyakan ke Lead. 🚀*
