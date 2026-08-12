@@ -103,9 +103,6 @@ export function parseDOMRecursive(element, parentRect, depth = 0, counter = { co
 
   try {
     const rect = element.getBoundingClientRect();
-    const computedStyle = window.getComputedStyle(element);
-
-    // Ambil metadata dasar
     const tagName = element.tagName.toLowerCase();
     const id = element.id || '';
     const className = element.className || '';
@@ -114,8 +111,30 @@ export function parseDOMRecursive(element, parentRect, depth = 0, counter = { co
     const relativeX = parentRect ? Math.round(rect.left - parentRect.left) : Math.round(rect.left + window.scrollX);
     const relativeY = parentRect ? Math.round(rect.top - parentRect.top) : Math.round(rect.top + window.scrollY);
 
+    // Deteksi tipe node visual awal
+    let nodeType = 'FRAME';
+    let imageSrc = null;
+    let svgContent = null;
+
+    if (tagName === 'img') {
+      nodeType = 'IMAGE';
+      // Ambil source image dan pastikan menjadi absolute URL
+      const srcAttr = element.getAttribute('src') || '';
+      if (srcAttr) {
+        try {
+          imageSrc = new URL(srcAttr, window.location.href).href;
+        } catch (_) {
+          imageSrc = srcAttr;
+        }
+      }
+    } else if (tagName === 'svg') {
+      nodeType = 'SVG';
+      svgContent = element.outerHTML || '';
+    }
+
     // Buat objek representasi node
     const node = {
+      type: nodeType,
       tagName,
       id,
       className,
@@ -124,11 +143,23 @@ export function parseDOMRecursive(element, parentRect, depth = 0, counter = { co
       width: Math.max(1, Math.round(rect.width)),
       height: Math.max(1, Math.round(rect.height)),
       children: [],
-      // Referensi DOM element asli disimpan untuk di-enrich di fase ekstraksi style
+      // Simpan element DOM asli untuk pemrosesan style di figma-mapper/style-extractor
       element
     };
 
+    if (imageSrc) {
+      node.imageSrc = imageSrc;
+    }
+    if (svgContent) {
+      node.svgContent = svgContent;
+    }
+
     counter.count++;
+
+    // Jika tipe node adalah SVG, hentikan rekursi ke children (Figma hanya butuh outerHTML mentah)
+    if (nodeType === 'SVG') {
+      return node;
+    }
 
     // Telusuri anak-anak elemen
     const children = element.children;
