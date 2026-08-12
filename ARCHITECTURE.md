@@ -1,670 +1,835 @@
-# 🏗️ ARCHITECTURE.md — CodeToFrame
+# 🏗️ ARCHITECTURE.md — CodeToFrame v2.0
 
-> Dokumen ini menjelaskan **arsitektur teknis** proyek CodeToFrame.  
-> Ditulis agar mudah dipahami oleh siapa pun yang baru pertama kali membuka repositori ini.
+> Dokumen arsitektur teknis untuk CodeToFrame v2.0.  
+> Menjelaskan pendekatan modular, alur data, dan keputusan desain yang mendasari sistem.
 >
-> **Terakhir diperbarui:** 10 Agustus 2026
+> **Terakhir diperbarui:** 12 Agustus 2026
 
 ---
 
 ## Daftar Isi
 
 1. [High-Level Architecture](#1--high-level-architecture)
-2. [Directory Structure](#2--directory-structure)
-3. [Directory Guide](#3--directory-guide)
-4. [Naming Conventions](#4--naming-conventions)
-5. [Data Flow](#5--data-flow)
+2. [Recursive DOM Traversal](#2--recursive-dom-traversal)
+3. [Computed Styles & Geometry](#3--computed-styles--geometry)
+4. [Clipboard API Injection](#4--clipboard-api-injection)
+5. [Module Architecture](#5--module-architecture)
+6. [Data Flow](#6--data-flow)
+7. [Naming Conventions](#7--naming-conventions)
 
 ---
 
 ## 1. 🗺️ High-Level Architecture
 
-### Konsep Utama
+### Perubahan Arsitektur: v1.0 → v2.0
 
-CodeToFrame adalah sistem yang terdiri dari **dua aplikasi independen** yang bekerja sama:
+**v1.0** menggunakan model dua komponen (Extension + Plugin Figma) yang terhubung lewat manual copy-paste JSON:
 
 ```
-┌──────────────────────────┐                        ┌──────────────────────────┐
-│                          │     📋 Copy/Paste      │                          │
-│   🌐 Browser Extension   │ ────── JSON ────────► │   🎨 Figma Plugin        │
-│   (Pengekstrak Data)     │                        │   (Penggambar Data)      │
-│                          │                        │                          │
-│   Berjalan di: Chrome    │                        │   Berjalan di: Figma     │
-│   Bahasa: TypeScript     │                        │   Bahasa: TypeScript     │
-│   Build: Vite            │                        │   UI: HTML/CSS           │
-│   Standar: Manifest V3   │                        │                          │
-└──────────────────────────┘                        └──────────────────────────┘
+v1.0: Extension ──JSON──► Clipboard ──Manual Paste──► Plugin Figma ──► Canvas
 ```
 
-### Kenapa Dipisah Jadi Dua Proyek?
+**v2.0** menyederhanakan menjadi satu komponen (Extension saja) yang menulis payload langsung ke clipboard OS dalam format yang Figma kenali secara native:
 
-Kamu mungkin bertanya: *"Kenapa tidak satu folder saja?"* — Jawabannya sederhana:
+```
+v2.0: Extension ──MIME Payload──► OS Clipboard ──Ctrl+V──► Figma Canvas (langsung!)
+```
 
-| Alasan | Penjelasan |
+### Diagram Arsitektur v2.0
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                         CHROME EXTENSION (Manifest V3)                     │
+│                                                                            │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │                         CONTENT SCRIPT                               │  │
+│  │                                                                      │  │
+│  │  ┌──────────────┐    ┌──────────────────┐    ┌───────────────────┐  │  │
+│  │  │ DOM Traverser │───►│ Style Extractor  │───►│  Figma Mapper    │  │  │
+│  │  │              │    │                  │    │                   │  │  │
+│  │  │ • Recursive  │    │ • getComputed    │    │ • DOM→Figma Tree │  │  │
+│  │  │   tree walk  │    │   Style()        │    │ • Auto Layout    │  │  │
+│  │  │ • Visibility │    │ • getBounding    │    │   detection      │  │  │
+│  │  │   filtering  │    │   ClientRect()   │    │ • Smart naming   │  │  │
+│  │  │ • Z-order    │    │ • Color parsing  │    │ • Type mapping   │  │  │
+│  │  │   preserve   │    │ • Shadow parsing │    │                   │  │  │
+│  │  └──────────────┘    └──────────────────┘    └────────┬──────────┘  │  │
+│  │                                                        │             │  │
+│  └────────────────────────────────────────────────────────┼─────────────┘  │
+│                                                           │                │
+│  ┌──────────────┐                                         │                │
+│  │   Popup UI   │◄──status updates───────────────────────►│                │
+│  │  popup.html  │                                         │                │
+│  │  popup.ts    │                                         ▼                │
+│  └──────────────┘                              ┌────────────────────┐      │
+│                                                │ Clipboard Writer   │      │
+│                                                │                    │      │
+│                                                │ • MIME encoding    │      │
+│                                                │ • Fallback to text │      │
+│                                                └─────────┬──────────┘      │
+│                                                          │                 │
+└──────────────────────────────────────────────────────────┼─────────────────┘
+                                                           │
+                                                ┌──────────▼──────────┐
+                                                │   OS Clipboard      │
+                                                │   MIME: figma/json  │
+                                                └──────────┬──────────┘
+                                                           │
+                                                    Ctrl+V / Cmd+V
+                                                           │
+                                                ┌──────────▼──────────┐
+                                                │   FIGMA CANVAS      │
+                                                │   Nested Frames     │
+                                                │   + Styling         │
+                                                │   + Auto Layout     │
+                                                │   🎉                │
+                                                └─────────────────────┘
+```
+
+### Prinsip Arsitektur v2.0
+
+| Prinsip | Penjelasan |
 |---|---|
-| **Lingkungan berbeda** | Ekstensi Chrome berjalan di browser (DOM, Web API), sedangkan Plugin Figma berjalan di sandbox Figma (Figma Plugin API). Keduanya punya API dan aturan yang berbeda total. |
-| **Build process berbeda** | Ekstensi Chrome di-build dengan Vite menjadi file JS + manifest. Plugin Figma di-build/compile TypeScript-nya sendiri secara terpisah. |
-| **Deploy terpisah** | Ekstensi dipasang di Chrome, plugin dipasang di Figma. Tidak ada kaitan deployment satu sama lain. |
-| **Dependency berbeda** | Masing-masing punya `package.json` sendiri dengan kebutuhan library yang berbeda. Menggabungkannya justru bikin `node_modules` membengkak dan membingungkan. |
-
-> **💡 Analogi:**  
-> Bayangkan kamu membuat aplikasi yang terdiri dari **kamera digital** dan **printer foto**. Kamera dan printer itu dua perangkat terpisah, tapi keduanya bekerja dengan format file yang sama (JPEG). Di proyek kita, "format file"-nya adalah **JSON**.
-
-### Prinsip Arsitektur
-
-Berikut prinsip-prinsip sederhana yang kita pegang di proyek ini:
-
-1. **Separation of Concerns** — Setiap bagian punya tanggung jawab yang jelas. Extension hanya mengekstrak, Plugin hanya menggambar. Tidak ada yang melakukan keduanya.
-2. **Shared Contract, Loose Coupling** — Kedua bagian sepakat soal format JSON (ini "kontrak"-nya), tapi tidak saling bergantung secara teknis. Kamu bisa mengembangkan satu bagian tanpa menyentuh yang lain.
-3. **Keep It Simple** — Ini MVP. Kita memilih solusi paling sederhana yang bisa jalan. Tidak pakai framework besar, tidak pakai arsitektur kompleks.
+| **Modular Pipeline** | Setiap tahap (traverse → extract → map → write) adalah modul independen yang bisa diuji dan diganti sendiri. |
+| **Tree-First** | Seluruh pipeline bekerja dengan struktur tree (bukan flat array) untuk mempertahankan hirarki DOM. |
+| **Fail-Soft** | Jika satu elemen atau properti gagal diekstrak, skip dan lanjutkan — jangan crash seluruh proses. |
+| **Progressive Fidelity** | Sistem mengekstrak sebanyak mungkin properti, tapi degradasi secara graceful jika ada yang tidak didukung. |
 
 ---
 
-## 2. 📂 Directory Structure
+## 2. 🌳 Recursive DOM Traversal
 
-Berikut adalah struktur folder lengkap proyek CodeToFrame:
+### Konsep Inti
+
+Inti dari sistem v2.0 adalah **penelusuran rekursif (recursive traversal)** dari root DOM (`document.body`) ke seluruh leaf node sambil membangun tree output yang mempertahankan hirarki visual.
+
+### Algoritma
 
 ```
-CodeToFrame/
-│
-│   ── Dokumentasi & Konfigurasi Root ──────────────────
-│
-├── README.md                          # Pengantar proyek & cara install
-├── PRD.md                             # Product Requirements Document
-├── ARCHITECTURE.md                    # Dokumen ini
-├── .gitignore                         # File/folder yang diabaikan Git
-│
-│   ── Browser Extension ──────────────────────────────
-│
-├── browser-extension/
-│   │
-│   ├── public/                        # File statis (tidak diproses Vite)
-│   │   ├── manifest.json              #   → Konfigurasi ekstensi (Manifest V3)
-│   │   └── icons/                     #   → Ikon ekstensi (16, 48, 128 px)
-│   │       ├── icon-16.png
-│   │       ├── icon-48.png
-│   │       └── icon-128.png
-│   │
-│   ├── src/                           # Kode sumber utama
-│   │   ├── popup/                     #   → Popup (UI kecil saat klik ikon ekstensi)
-│   │   │   ├── popup.html             #       Tampilan popup
-│   │   │   ├── popup.ts               #       Logika popup (tombol Extract & Copy)
-│   │   │   └── popup.css              #       Styling popup
-│   │   │
-│   │   ├── content/                   #   → Content Script (berjalan di halaman web)
-│   │   │   └── extractor.ts           #       Logika utama: membaca DOM → JSON
-│   │   │
-│   │   ├── background/               #   → Service Worker (opsional, jika dibutuhkan)
-│   │   │   └── service-worker.ts      #       Koordinasi antar bagian ekstensi
-│   │   │
-│   │   └── types/                     #   → TypeScript type definitions
-│   │       └── schema.ts              #       Interface untuk format JSON
-│   │
-│   ├── dist/                          # ⚠️ Hasil build (JANGAN di-edit manual)
-│   ├── package.json                   # Dependency & scripts npm
-│   ├── tsconfig.json                  # Konfigurasi TypeScript
-│   └── vite.config.ts                 # Konfigurasi Vite (build tool)
-│
-│   ── Figma Plugin ───────────────────────────────────
-│
-├── figma-plugin/
-│   │
-│   ├── src/                           # Kode sumber utama
-│   │   ├── ui/                        #   → Antarmuka Plugin (berjalan di iframe)
-│   │   │   ├── ui.html                #       Tampilan: textarea + tombol Generate
-│   │   │   └── ui.css                 #       Styling antarmuka plugin
-│   │   │
-│   │   ├── plugin/                    #   → Logika Plugin (berjalan di sandbox Figma)
-│   │   │   ├── controller.ts          #       Entry point: menerima pesan dari UI
-│   │   │   └── renderer.ts            #       Menggambar elemen (Rectangle, Text) di kanvas
-│   │   │
-│   │   └── types/                     #   → TypeScript type definitions
-│   │       └── schema.ts              #       Interface untuk format JSON (sama dengan extension)
-│   │
-│   ├── dist/                          # ⚠️ Hasil build (JANGAN di-edit manual)
-│   ├── manifest.json                  # Konfigurasi plugin Figma
-│   ├── package.json                   # Dependency & scripts npm
-│   └── tsconfig.json                  # Konfigurasi TypeScript
-│
-│   ── Shared (Opsional, Untuk Masa Depan) ────────────
-│
-└── shared/                            # (Belum dipakai di MVP)
-    └── types/                         #   → Tempat type definitions bersama
-        └── schema.ts                  #       Jika nanti ingin di-share antar proyek
+FUNGSI traverse(domNode, parentFigmaNode):
+    1. PERIKSA visibilitas domNode
+       - Jika display:none → SKIP node DAN seluruh children-nya
+       - Jika visibility:hidden → SKIP node sendiri, TAPI tetap proses children
+       - Jika width=0 DAN height=0 → SKIP
+       - Jika tag non-visual (script, style, meta, link) → SKIP
+
+    2. KLASIFIKASI node menjadi tipe Figma:
+       - Container tags (div, section, header, nav, ...) → FRAME
+       - Text tags (p, h1-h6, span, a, ...) → TEXT
+       - <img> → IMAGE
+       - <svg> inline → VECTOR
+       - Lainnya → FRAME (generic container)
+
+    3. BANGUN figmaNode dari domNode:
+       - Baca geometry (getBoundingClientRect)
+       - Baca computed styles (getComputedStyle)
+       - Buat nama layer (smart naming dari tag/class/id)
+       - Deteksi auto layout (display:flex → layoutMode)
+
+    4. UNTUK SETIAP childElement dari domNode:
+       - traverse(childElement, figmaNode)    ← REKURSI
+       - Posisikan child relatif terhadap parent
+
+    5. TAMBAHKAN figmaNode ke parentFigmaNode.children
+
+    KEMBALIKAN figmaNode
 ```
 
-### Catatan Tentang `dist/`
+### Penanganan Z-Order (Urutan Tumpukan)
 
-Folder `dist/` adalah **hasil output dari proses build**. Isinya di-generate otomatis oleh Vite (untuk extension) atau TypeScript compiler (untuk plugin).
+Browser merender elemen DOM dalam urutan kemunculannya di HTML (kecuali ada `z-index` eksplisit). Untuk mempertahankan urutan tumpukan visual di Figma:
 
-> **⚠️ Aturan Penting:**
-> - **JANGAN** mengedit file di dalam `dist/` secara manual.
-> - **JANGAN** meng-commit `dist/` ke Git (pastikan sudah masuk `.gitignore`).
-> - Untuk me-rebuild, jalankan `npm run build` di folder masing-masing proyek.
+1. **Proses children sesuai urutan DOM** — child pertama di DOM = child pertama di Figma (di belakang/bawah tumpukan).
+2. **Elemen dengan `position: absolute/fixed` dan `z-index` tinggi** — pindahkan ke akhir array children agar tergambar di atas.
+3. **Stacking context** — jika elemen membuat stacking context baru (via `z-index`, `opacity < 1`, `transform`, dll.), buat Frame baru sebagai container.
 
----
-
-## 3. 📖 Directory Guide
-
-Bagian ini menjelaskan **apa isi dan tanggung jawab** setiap folder utama. Anggap ini sebagai "peta" untuk tahu di mana harus menaruh kode baru.
-
----
-
-### 3.1 `browser-extension/` — Ekstensi Chrome
-
-Ini adalah proyek ekstensi Chrome yang bertugas **mengekstrak** elemen-elemen dari halaman web.
-
-#### `browser-extension/public/`
-
-| File/Folder | Fungsi |
-|---|---|
-| `manifest.json` | File konfigurasi utama ekstensi Chrome. Mendefinisikan nama, versi, permission, dan file apa saja yang dipakai. Formatnya mengikuti standar **Manifest V3**. |
-| `icons/` | Ikon-ikon ekstensi dalam berbagai ukuran. Chrome butuh minimal ukuran 16px, 48px, dan 128px. |
-
-> **💡 Tentang folder `public/`:**  
-> Semua file di sini akan di-copy langsung ke folder `dist/` saat build, tanpa diproses oleh Vite. Cocok untuk file statis seperti `manifest.json` dan gambar.
-
-#### `browser-extension/src/popup/`
-
-**Apa itu Popup?** — Popup adalah jendela kecil yang muncul saat pengguna mengklik ikon ekstensi di toolbar Chrome.
-
-| File | Fungsi |
-|---|---|
-| `popup.html` | Struktur HTML popup. Berisi tombol "Extract" dan area untuk menampilkan/meng-copy JSON. |
-| `popup.ts` | Logika TypeScript popup. Menangani klik tombol, berkomunikasi dengan Content Script, dan fitur copy-to-clipboard. |
-| `popup.css` | Styling sederhana untuk popup. |
-
-**Alur kerja Popup:**
 ```
-Pengguna klik ikon ekstensi
-    → popup.html terbuka
-    → Pengguna klik "Extract"
-    → popup.ts mengirim pesan ke Content Script
-    → Content Script menjalankan ekstraksi
-    → Hasil JSON dikirim balik ke popup
-    → popup.ts menampilkan JSON & aktifkan tombol "Copy"
+Urutan DOM:                     Urutan di Figma (bottom-to-top):
+<div class="a">   ─── ①        Layer "div.a"       ← paling bawah
+<div class="b">   ─── ②        Layer "div.b"       ← di atas a
+<div class="c">   ─── ③        Layer "div.c"       ← paling atas
 ```
 
-#### `browser-extension/src/content/`
+### Batasan Kedalaman
 
-**Apa itu Content Script?** — Content Script adalah kode JavaScript/TypeScript yang **disuntikkan** langsung ke halaman web yang sedang dibuka pengguna. Artinya, kode ini punya akses penuh ke DOM halaman tersebut.
+Untuk mencegah stack overflow dan payload yang terlalu besar:
 
-| File | Fungsi |
-|---|---|
-| `extractor.ts` | Bintang utama! File ini berisi logika untuk: |
-|  | 1. Menelusuri (traverse) elemen-elemen DOM di halaman |
-|  | 2. Membaca properti CSS setiap elemen (`getComputedStyle`) |
-|  | 3. Mengambil posisi elemen (`getBoundingClientRect`) |
-|  | 4. Memfilter elemen mana yang termasuk Rectangle vs Text |
-|  | 5. Menyusun semua data menjadi objek JSON |
-
-> **💡 Penting untuk dipahami:**  
-> Content Script berjalan di **"dunia"** halaman web (bisa akses DOM), tapi **terisolasi** dari kode JavaScript asli halaman tersebut. Ia berkomunikasi dengan Popup lewat **message passing** (`chrome.runtime.sendMessage` / `chrome.runtime.onMessage`).
-
-#### `browser-extension/src/background/`
-
-**Apa itu Service Worker?** — Service Worker adalah script yang berjalan di background (latar belakang), terpisah dari halaman web maupun popup.
-
-| File | Fungsi |
-|---|---|
-| `service-worker.ts` | Bertugas sebagai "koordinator" jika dibutuhkan. Di MVP, kemungkinan dipakai minimal — misalnya hanya untuk mendaftarkan Content Script atau menangani event tertentu. |
-
-> **💡 Catatan:**  
-> Di Manifest V3, background script **wajib** berupa Service Worker (bukan background page seperti di V2). Service Worker bisa "mati" dan "hidup" kembali sesuai kebutuhan — jadi jangan simpan data di variabel global.
-
-#### `browser-extension/src/types/`
-
-| File | Fungsi |
-|---|---|
-| `schema.ts` | Berisi **TypeScript interface** yang mendefinisikan bentuk data JSON. File ini adalah representasi kode dari "kontrak data" antara extension dan plugin. |
-
-**Contoh isi `schema.ts`:**
 ```typescript
-export interface CodeToFrameData {
-  sourceUrl: string;
-  viewportWidth: number;
-  viewportHeight: number;
-  elements: FrameElement[];
-}
-
-export type FrameElement = RectangleElement | TextElement;
-
-export interface RectangleElement {
-  type: "RECTANGLE";
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  backgroundColor: RGBColor;
-}
-
-export interface TextElement {
-  type: "TEXT";
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  textContent: string;
-  fontSize: number;
-  textColor: RGBColor;
-}
-
-export interface RGBColor {
-  r: number; // 0–255
-  g: number; // 0–255
-  b: number; // 0–255
-}
+const MAX_DEPTH = 15;        // Kedalaman maksimal nesting
+const MAX_NODES = 2000;      // Jumlah maksimal node yang diekstrak
 ```
+
+Jika batas tercapai:
+- **MAX_DEPTH**: Flatten sisa children ke level terakhir yang diizinkan.
+- **MAX_NODES**: Hentikan traversal, log warning, dan laporkan ke pengguna via popup.
 
 ---
 
-### 3.2 `figma-plugin/` — Plugin Figma
+## 3. 📐 Computed Styles & Geometry
 
-Ini adalah proyek plugin Figma yang bertugas **menggambar ulang** data JSON menjadi objek-objek di kanvas Figma.
+### Geometry: `getBoundingClientRect()`
 
-#### Konsep Penting: Dua "Dunia" di Plugin Figma
+Setiap elemen DOM memiliki posisi dan dimensi yang bisa dibaca melalui `getBoundingClientRect()`:
 
-Sebelum masuk ke detail folder, kamu perlu tahu bahwa plugin Figma terdiri dari **dua bagian yang berjalan di lingkungan terpisah**:
-
-```
-┌──────────────────────────────────────────────────────┐
-│                     Plugin Figma                      │
-│                                                       │
-│  ┌─────────────────┐       ┌──────────────────────┐  │
-│  │   🖼️ UI Layer    │ ◄──► │   ⚙️ Sandbox Layer    │  │
-│  │   (iframe)      │       │   (main thread)      │  │
-│  │                 │       │                       │  │
-│  │ • ui.html       │       │ • controller.ts      │  │
-│  │ • ui.css        │       │ • renderer.ts        │  │
-│  │                 │       │                       │  │
-│  │ Bisa: DOM, CSS  │       │ Bisa: Figma API      │  │
-│  │ Tidak bisa:     │       │ Tidak bisa:           │  │
-│  │   Figma API     │       │   DOM, window, fetch  │  │
-│  └─────────────────┘       └──────────────────────┘  │
-│          │                          ▲                  │
-│          └───── postMessage() ──────┘                  │
-└──────────────────────────────────────────────────────┘
-```
-
-**Mereka berkomunikasi lewat `postMessage()`** — mirip seperti mengirim surat antar ruangan.
-
-#### `figma-plugin/src/ui/`
-
-Ini adalah **"wajah"** plugin — yang dilihat dan diinteraksi oleh pengguna.
-
-| File | Fungsi |
-|---|---|
-| `ui.html` | Tampilan antarmuka plugin. Berisi: |
-|  | • `<textarea>` — tempat pengguna paste JSON |
-|  | • Tombol **"Generate"** — untuk memulai proses render |
-|  | • Area status/pesan — untuk menampilkan feedback |
-| `ui.css` | Styling sederhana untuk antarmuka di atas. |
-
-**Bagaimana UI mengirim data ke Sandbox:**
 ```typescript
-// Di dalam ui.html (script tag)
-document.getElementById('btn-generate').addEventListener('click', () => {
-  const jsonText = document.getElementById('json-input').value;
-  const data = JSON.parse(jsonText);
-
-  // Kirim data ke sandbox layer
-  parent.postMessage({ pluginMessage: { type: 'generate', payload: data } }, '*');
-});
+const rect = element.getBoundingClientRect();
+// rect.x, rect.y    → posisi relatif terhadap viewport (top-left corner)
+// rect.width         → lebar elemen (termasuk padding + border)
+// rect.height        → tinggi elemen (termasuk padding + border)
 ```
 
-#### `figma-plugin/src/plugin/`
+**Koordinat Absolut vs Relatif:**
 
-Ini adalah **"otak"** plugin — yang punya akses ke Figma API dan bisa menggambar di kanvas.
+Dalam v2.0 (nested structure), koordinat child harus **relatif terhadap parent**, bukan terhadap viewport:
 
-| File | Fungsi |
-|---|---|
-| `controller.ts` | **Entry point** plugin. File ini: |
-|  | 1. Membuka UI (`figma.showUI(...)`) |
-|  | 2. Mendengarkan pesan dari UI (`figma.ui.onmessage`) |
-|  | 3. Memanggil renderer saat menerima data |
-| `renderer.ts` | **Jantung** plugin. File ini berisi fungsi-fungsi untuk: |
-|  | 1. Membaca array `elements` dari JSON |
-|  | 2. Membuat `figma.createRectangle()` untuk elemen bertipe RECTANGLE |
-|  | 3. Membuat `figma.createText()` untuk elemen bertipe TEXT |
-|  | 4. Mengatur posisi (x, y), ukuran (width, height), dan properti visual |
-
-**Contoh sederhana `renderer.ts`:**
 ```typescript
-// Konversi warna dari format 0–255 ke format Figma 0–1
-function toFigmaColor(color: { r: number; g: number; b: number }): RGB {
+/**
+ * Menghitung posisi child relatif terhadap parent-nya.
+ * Ini penting karena di Figma, posisi children di dalam Frame
+ * selalu relatif terhadap sudut kiri atas Frame tersebut.
+ *
+ * @param childRect - Bounding rect dari child element
+ * @param parentRect - Bounding rect dari parent element
+ * @returns Koordinat { x, y } relatif terhadap parent
+ */
+function getRelativePosition(
+  childRect: DOMRect,
+  parentRect: DOMRect
+): { x: number; y: number } {
   return {
-    r: color.r / 255,
-    g: color.g / 255,
-    b: color.b / 255,
+    x: Math.round(childRect.left - parentRect.left),
+    y: Math.round(childRect.top - parentRect.top),
   };
 }
-
-function renderRectangle(element: RectangleElement): RectangleNode {
-  const rect = figma.createRectangle();
-  rect.x = element.x;
-  rect.y = element.y;
-  rect.resize(element.width, element.height);
-  rect.fills = [{ type: 'SOLID', color: toFigmaColor(element.backgroundColor) }];
-  return rect;
-}
 ```
 
-#### `figma-plugin/src/types/`
-
-| File | Fungsi |
-|---|---|
-| `schema.ts` | Salinan dari `browser-extension/src/types/schema.ts`. Berisi interface TypeScript yang sama persis. |
-
-> **💡 Kenapa di-copy, bukan di-share?**  
-> Di MVP, kita pilih cara paling sederhana: copy file `schema.ts` ke kedua proyek. Ini menghindari kompleksitas setup monorepo atau npm package. Di masa depan, jika proyek berkembang, kita bisa memindahkan type definitions ke folder `shared/` dan mengonfigurasi keduanya agar mengacu ke satu sumber.
-
-#### `figma-plugin/manifest.json`
-
-File ini **berbeda** dari `manifest.json` milik ekstensi Chrome. Ini adalah konfigurasi khusus untuk Figma Plugin.
-
-**Contoh isi:**
-```json
-{
-  "name": "CodeToFrame",
-  "id": "000000000000000000",
-  "api": "1.0.0",
-  "main": "dist/plugin/controller.js",
-  "ui": "dist/ui/ui.html",
-  "editorType": ["figma"]
-}
-```
-
-| Field | Keterangan |
-|---|---|
-| `name` | Nama plugin yang muncul di Figma |
-| `id` | ID unik plugin (didapat saat mendaftarkan plugin di Figma) |
-| `main` | Path ke file JavaScript utama (hasil compile dari `controller.ts`) |
-| `ui` | Path ke file HTML untuk antarmuka plugin |
-| `editorType` | Di editor Figma mana plugin ini bisa dipakai |
-
----
-
-### 3.3 `shared/` — Folder Bersama *(Opsional, Belum Dipakai di MVP)*
-
-Folder ini disiapkan untuk masa depan. Saat ini belum digunakan.
-
-**Rencana penggunaan:**
-- Menyimpan **type definitions** (`schema.ts`) di satu tempat agar kedua proyek mengacu ke sumber yang sama.
-- Menyimpan **utility functions** yang mungkin dibutuhkan kedua proyek.
-
----
-
-### 3.4 Ringkasan: Panduan "Di Mana Harus Menaruh Kode?"
-
-| Kamu mau... | Taruh di... |
-|---|---|
-| Mengubah cara elemen web diekstrak | `browser-extension/src/content/extractor.ts` |
-| Mengubah tampilan popup ekstensi | `browser-extension/src/popup/popup.html` + `popup.css` |
-| Menambah logika tombol di popup | `browser-extension/src/popup/popup.ts` |
-| Mengubah permission ekstensi | `browser-extension/public/manifest.json` |
-| Mengubah tampilan plugin Figma | `figma-plugin/src/ui/ui.html` + `ui.css` |
-| Mengubah cara elemen digambar di Figma | `figma-plugin/src/plugin/renderer.ts` |
-| Menambah tipe elemen baru ke format JSON | `*/src/types/schema.ts` (di **kedua** proyek) |
-| Mengubah konfigurasi build extension | `browser-extension/vite.config.ts` |
-
----
-
-## 4. 📝 Naming Conventions
-
-Aturan penamaan yang kita pakai di proyek ini. Tujuannya agar kode konsisten dan mudah dibaca.
-
-### 4.1 File & Folder
-
-| Jenis | Format | Contoh | ❌ Hindari |
-|---|---|---|---|
-| Folder | `kebab-case` | `browser-extension/`, `content/` | `BrowserExtension/`, `Content/` |
-| File TypeScript | `kebab-case.ts` | `service-worker.ts`, `extractor.ts` | `ServiceWorker.ts`, `Extractor.ts` |
-| File HTML | `kebab-case.html` | `popup.html`, `ui.html` | `Popup.html` |
-| File CSS | `kebab-case.css` | `popup.css`, `ui.css` | `Popup.css` |
-| File konfigurasi | Ikuti konvensi tooling | `tsconfig.json`, `vite.config.ts` | — |
-
-### 4.2 TypeScript — Variabel & Fungsi
-
-| Jenis | Format | Contoh |
-|---|---|---|
-| Variabel biasa | `camelCase` | `sourceUrl`, `viewportWidth` |
-| Konstanta | `UPPER_SNAKE_CASE` | `MAX_ELEMENTS`, `DEFAULT_FONT_SIZE` |
-| Fungsi | `camelCase` | `extractElements()`, `renderRectangle()` |
-| Parameter fungsi | `camelCase` | `elementNode`, `jsonData` |
-
-### 4.3 TypeScript — Interface & Type
-
-| Jenis | Format | Contoh |
-|---|---|---|
-| Interface | `PascalCase` | `CodeToFrameData`, `RectangleElement` |
-| Type Alias | `PascalCase` | `FrameElement`, `RGBColor` |
-| Enum | `PascalCase` | `ElementType` |
-| Enum Value | `UPPER_SNAKE_CASE` | `ElementType.RECTANGLE`, `ElementType.TEXT` |
-
-### 4.4 JSON Fields
-
-| Format | Contoh | Alasan |
-|---|---|---|
-| `camelCase` | `sourceUrl`, `backgroundColor`, `textContent` | Konsisten dengan konvensi JavaScript/TypeScript |
-
-### 4.5 Git Branches
-
-| Jenis Branch | Format | Contoh |
-|---|---|---|
-| Fitur baru | `feature/deskripsi-singkat` | `feature/extract-text-elements` |
-| Perbaikan bug | `fix/deskripsi-singkat` | `fix/popup-copy-button` |
-| Dokumen | `docs/deskripsi-singkat` | `docs/update-architecture` |
-
----
-
-## 5. 🔄 Data Flow
-
-Bagian ini menjelaskan **perjalanan data** dari awal (halaman web) sampai akhir (kanvas Figma). Ikuti nomor urutannya.
-
-### Diagram Alur Lengkap
-
-```
-                           BROWSER CHROME                                        FIGMA
-  ┌─────────────────────────────────────────────────────────┐    ┌──────────────────────────────────────┐
-  │                                                         │    │                                      │
-  │  ┌───────────┐    ┌───────────┐    ┌────────────────┐   │    │  ┌─────────┐    ┌─────────────────┐  │
-  │  │           │ ①  │           │ ②  │                │   │ ④  │  │         │ ⑤  │                 │  │
-  │  │  Halaman  │───►│  Content  │───►│    Popup       │───┼────┼─►│  UI     │───►│  Sandbox        │  │
-  │  │  Web      │    │  Script   │    │    Extension   │   │    │  │  Plugin │    │  Plugin         │  │
-  │  │  (DOM)    │    │           │    │                │   │    │  │         │    │                 │  │
-  │  └───────────┘    └───────────┘    └───┬────────────┘   │    │  └─────────┘    └────────┬────────┘  │
-  │                                        │         ▲      │    │                          │           │
-  │                                        │ ③       │      │    │                          │ ⑥         │
-  │                                        ▼         │      │    │                          ▼           │
-  │                                    ┌─────────┐   │      │    │                    ┌───────────┐     │
-  │                                    │Clipboard│───┘      │    │                    │  Kanvas   │     │
-  │                                    │  (JSON) │          │    │                    │  Figma    │     │
-  │                                    └─────────┘          │    │                    │  🎉      │     │
-  │                                                         │    │                    └───────────┘     │
-  └─────────────────────────────────────────────────────────┘    └──────────────────────────────────────┘
-```
-
-### Penjelasan Setiap Langkah
-
----
-
-#### ① Ekstraksi DOM → Data Mentah
-
-**Siapa:** `extractor.ts` (Content Script)  
-**Di mana:** Berjalan di dalam konteks halaman web  
-**Apa yang terjadi:**
-
-```
-Halaman Web (DOM)
-    │
-    ├── Traversal: Menelusuri elemen-elemen DOM (div, p, h1, span, dll.)
-    │
-    ├── Filter: Mengecek apakah elemen terlihat (visible) dan termasuk tipe yang didukung
-    │
-    ├── Baca Properti:
-    │   ├── getComputedStyle(el) → backgroundColor, color, fontSize
-    │   └── el.getBoundingClientRect() → x, y, width, height
-    │
-    └── Output: Array of FrameElement objects
-```
-
-**Detail teknis:**
-- Gunakan `document.querySelectorAll('*')` atau traversal yang lebih terarah untuk mengumpulkan elemen.
-- Gunakan `window.getComputedStyle(element)` untuk membaca properti CSS yang sudah dihitung browser.
-- Gunakan `element.getBoundingClientRect()` untuk mendapatkan posisi dan dimensi pasti dalam pixel.
-- Elemen yang `display: none` atau `visibility: hidden` → **skip**.
-- Elemen `<img>`, `<svg>`, dan elemen di luar ruang lingkup → **skip** (jangan error).
-
----
-
-#### ② Content Script → Popup (Message Passing)
-
-**Siapa:** `extractor.ts` → `popup.ts`  
-**Mekanisme:** Chrome Extension Message Passing  
-**Apa yang terjadi:**
+**Penanganan Scroll:**
+- `getBoundingClientRect()` mengembalikan posisi relatif terhadap **viewport yang terlihat**, bukan posisi absolut di halaman.
+- Untuk elemen di bawah fold (perlu scroll), posisi Y akan negatif jika sudah di-scroll melewati viewport.
+- **Solusi:** Tambahkan `window.scrollX` dan `window.scrollY` untuk mendapatkan posisi absolut di halaman.
 
 ```typescript
-// Di extractor.ts (Content Script)
-chrome.runtime.sendMessage({
-  type: 'EXTRACTION_RESULT',
-  payload: extractedData   // ← objek CodeToFrameData
-});
+const absoluteX = rect.left + window.scrollX;
+const absoluteY = rect.top + window.scrollY;
+```
 
-// Di popup.ts
-chrome.runtime.onMessage.addListener((message) => {
-  if (message.type === 'EXTRACTION_RESULT') {
-    const jsonString = JSON.stringify(message.payload, null, 2);
-    displayJSON(jsonString);
+### Computed Styles: `getComputedStyle()`
+
+`window.getComputedStyle(element)` mengembalikan semua properti CSS yang sudah dihitung (resolved) oleh browser — termasuk inherited styles, cascade, dan unit conversion.
+
+**Properti yang Diekstrak:**
+
+```typescript
+const style = window.getComputedStyle(element);
+
+// === BACKGROUND ===
+style.backgroundColor      // "rgb(59, 130, 246)" atau "rgba(0,0,0,0)"
+style.backgroundImage       // "linear-gradient(...)" atau "url(...)" atau "none"
+
+// === BORDER ===
+style.borderTopWidth        // "1px" — per sisi
+style.borderTopColor        // "rgb(229, 231, 235)"
+style.borderTopStyle        // "solid", "dashed", "none"
+style.borderRadius          // Shorthand: "8px" atau "8px 4px 12px 0px"
+
+// Untuk per-corner radius:
+style.borderTopLeftRadius       // "8px"
+style.borderTopRightRadius      // "4px"
+style.borderBottomRightRadius   // "12px"
+style.borderBottomLeftRadius    // "0px"
+
+// === BOX SHADOW ===
+style.boxShadow             // "rgba(0,0,0,0.1) 0px 4px 6px -1px, rgba(0,0,0,0.06) 0px 2px 4px -1px"
+                             // Bisa multiple shadows, dipisahkan koma
+
+// === OPACITY ===
+style.opacity               // "0.5" (string — harus di-parseFloat)
+
+// === TYPOGRAPHY ===
+style.fontFamily            // "'Inter', sans-serif" — termasuk fallback stack
+style.fontSize              // "16px"
+style.fontWeight            // "400" atau "bold" (resolved ke angka)
+style.lineHeight            // "24px" atau "normal"
+style.letterSpacing         // "0.5px" atau "normal"
+style.textAlign             // "left", "center", "right", "justify"
+style.color                 // "rgb(30, 30, 30)"
+style.textDecorationLine    // "underline", "line-through", "none"
+
+// === LAYOUT ===
+style.display               // "flex", "block", "inline", "none", dll.
+style.flexDirection          // "row", "column", "row-reverse", "column-reverse"
+style.justifyContent         // "flex-start", "center", "space-between", dll.
+style.alignItems             // "stretch", "center", "flex-start", dll.
+style.gap                   // "16px" atau "16px 8px" (row-gap column-gap)
+style.paddingTop             // Per sisi: "16px"
+style.paddingRight           // "24px"
+style.paddingBottom          // "16px"
+style.paddingLeft            // "24px"
+style.overflow               // "hidden", "visible", "auto", "scroll"
+style.position               // "relative", "absolute", "fixed", "sticky"
+```
+
+**Catatan Penting Tentang `getComputedStyle`:**
+1. Semua nilai yang dikembalikan berupa **string** — harus di-parse ke angka/objek.
+2. Warna selalu dikembalikan dalam format `rgb()` atau `rgba()` — bahkan jika di CSS ditulis sebagai hex atau hsl.
+3. `shorthand` properties (seperti `border`, `padding`) mungkin tidak tersedia — gunakan longhand per sisi.
+4. `inherit`, `initial`, `unset` sudah di-resolve oleh browser.
+
+### Parsing Warna CSS yang Robust
+
+Browser mengembalikan warna dalam format terbatas, tapi extension mungkin juga perlu menangani nilai dari atribut atau inline style:
+
+```typescript
+/**
+ * Parser warna CSS yang komprehensif.
+ * Mendukung: rgb(), rgba(), hex (3, 4, 6, 8 digit), hsl(), hsla(), named colors.
+ *
+ * @param raw - String warna CSS mentah
+ * @returns Objek RGBA dengan nilai 0-255 (r, g, b) dan 0-1 (a)
+ */
+function parseColor(raw: string): { r: number; g: number; b: number; a: number } {
+  const DEFAULT = { r: 0, g: 0, b: 0, a: 1 };
+
+  if (!raw || raw === 'transparent') return { ...DEFAULT, a: 0 };
+
+  // 1. Format rgb(R, G, B) atau rgba(R, G, B, A)
+  const rgbMatch = raw.match(
+    /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\s*\)/
+  );
+  if (rgbMatch) {
+    return {
+      r: parseInt(rgbMatch[1], 10),
+      g: parseInt(rgbMatch[2], 10),
+      b: parseInt(rgbMatch[3], 10),
+      a: rgbMatch[4] !== undefined ? parseFloat(rgbMatch[4]) : 1,
+    };
   }
-});
-```
 
-> **💡 Catatan:** Cara komunikasi antara popup dan content script bisa bervariasi (misalnya lewat `chrome.tabs.sendMessage` atau `chrome.scripting.executeScript`). Yang penting konsepnya sama: kirim pesan, terima pesan.
+  // 2. Format HEX: #RGB, #RGBA, #RRGGBB, #RRGGBBAA
+  const hexMatch = raw.match(/^#([0-9a-fA-F]{3,8})$/);
+  if (hexMatch) {
+    const hex = hexMatch[1];
+    if (hex.length === 3) {
+      return {
+        r: parseInt(hex[0] + hex[0], 16),
+        g: parseInt(hex[1] + hex[1], 16),
+        b: parseInt(hex[2] + hex[2], 16),
+        a: 1,
+      };
+    }
+    if (hex.length === 6) {
+      return {
+        r: parseInt(hex.slice(0, 2), 16),
+        g: parseInt(hex.slice(2, 4), 16),
+        b: parseInt(hex.slice(4, 6), 16),
+        a: 1,
+      };
+    }
+    if (hex.length === 8) {
+      return {
+        r: parseInt(hex.slice(0, 2), 16),
+        g: parseInt(hex.slice(2, 4), 16),
+        b: parseInt(hex.slice(4, 6), 16),
+        a: parseInt(hex.slice(6, 8), 16) / 255,
+      };
+    }
+  }
 
----
-
-#### ③ JSON → Clipboard
-
-**Siapa:** `popup.ts`  
-**Apa yang terjadi:**
-
-Setelah JSON ditampilkan di popup, pengguna menekan tombol **"Copy"**:
-
-```typescript
-navigator.clipboard.writeText(jsonString);
-```
-
-Data JSON sekarang ada di clipboard sistem operasi.
-
----
-
-#### ④ Clipboard → Plugin Figma (Manual Copy-Paste)
-
-**Siapa:** Pengguna (manusia!)  
-**Apa yang terjadi:**
-
-Ini adalah satu-satunya langkah **manual** dalam alur kerja:
-
-1. Pengguna beralih dari Chrome ke Figma.
-2. Pengguna membuka plugin CodeToFrame.
-3. Pengguna melakukan **Ctrl+V / Cmd+V** di textarea plugin.
-
-> **💡 Kenapa tidak otomatis?**  
-> Menghubungkan ekstensi Chrome langsung ke plugin Figma membutuhkan backend server (WebSocket/API), yang jauh di luar ruang lingkup MVP. Copy-paste adalah solusi paling sederhana dan paling *reliable*.
-
----
-
-#### ⑤ UI Plugin → Sandbox Plugin (postMessage)
-
-**Siapa:** `ui.html` → `controller.ts`  
-**Mekanisme:** `postMessage()` (standar komunikasi iframe ↔ parent di Figma Plugin)  
-**Apa yang terjadi:**
-
-```
-ui.html                               controller.ts
-  │                                        │
-  │  ┌──────────────────────────┐          │
-  ├──│ 1. Parse JSON dari       │          │
-  │  │    textarea              │          │
-  │  └──────────────────────────┘          │
-  │                                        │
-  │  parent.postMessage({                  │
-  │    pluginMessage: {          ─────────►│ figma.ui.onmessage = (msg) => {
-  │      type: 'generate',                 │   if (msg.type === 'generate') {
-  │      payload: parsedData               │     renderElements(msg.payload);
-  │    }                                   │   }
-  │  }, '*')                               │ }
-  │                                        │
-```
-
----
-
-#### ⑥ Sandbox Plugin → Kanvas Figma (Figma API)
-
-**Siapa:** `controller.ts` → `renderer.ts`  
-**Mekanisme:** Figma Plugin API  
-**Apa yang terjadi:**
-
-```
-controller.ts menerima data
-    │
-    ▼
-renderer.ts memproses array elements
-    │
-    ├── Untuk setiap element:
-    │   │
-    │   ├── Jika type === "RECTANGLE":
-    │   │   ├── figma.createRectangle()
-    │   │   ├── Set x, y, width, height
-    │   │   └── Set fills (backgroundColor ÷ 255)
-    │   │
-    │   └── Jika type === "TEXT":
-    │       ├── figma.createText()
-    │       ├── Set x, y, width, height
-    │       ├── Set characters (textContent)
-    │       ├── Set fontSize
-    │       └── Set fills (textColor ÷ 255)
-    │
-    ▼
-Semua elemen muncul di kanvas Figma! 🎉
-```
-
-**Hal penting saat menggambar Text di Figma:**
-```typescript
-// ⚠️ Sebelum mengisi teks, font HARUS di-load dulu!
-async function renderText(element: TextElement): Promise<TextNode> {
-  const text = figma.createText();
-
-  // Wajib: load font sebelum set characters
-  await figma.loadFontAsync({ family: "Inter", style: "Regular" });
-
-  text.characters = element.textContent;
-  text.fontSize = element.fontSize;
-  text.x = element.x;
-  text.y = element.y;
-  text.resize(element.width, element.height);
-  text.fills = [{ type: 'SOLID', color: toFigmaColor(element.textColor) }];
-
-  return text;
+  // 3. Fallback
+  return DEFAULT;
 }
 ```
 
-> **⚠️ Gotcha penting:**  
-> Di Figma API, kamu **wajib** memanggil `figma.loadFontAsync()` sebelum mengubah properti teks seperti `characters`, `fontSize`, dll. Tanpa ini, plugin akan error. Untuk MVP, kita cukup gunakan font default **"Inter"** style **"Regular"** untuk semua teks.
+### Parsing Box-Shadow
+
+`box-shadow` CSS bisa sangat kompleks — multiple shadows, inset, dan spread:
+
+```typescript
+/**
+ * Parsing string box-shadow CSS menjadi array objek shadow.
+ *
+ * Format CSS: [inset?] offsetX offsetY [blur] [spread] color
+ * Contoh: "rgba(0,0,0,0.1) 0px 4px 6px -1px, rgba(0,0,0,0.06) 0px 2px 4px -1px"
+ *
+ * @param raw - String box-shadow dari getComputedStyle
+ * @returns Array objek shadow
+ */
+function parseBoxShadow(raw: string): ShadowEffect[] {
+  if (!raw || raw === 'none') return [];
+
+  const shadows: ShadowEffect[] = [];
+
+  // Split by koma, tapi hati-hati: rgba() juga mengandung koma
+  // Gunakan regex yang aware terhadap parentheses
+  const shadowParts = raw.split(/,(?![^(]*\))/);
+
+  for (const part of shadowParts) {
+    const trimmed = part.trim();
+    const isInset = trimmed.includes('inset');
+    const cleaned = trimmed.replace('inset', '').trim();
+
+    // Ekstrak warna (biasanya di awal atau akhir)
+    const colorMatch = cleaned.match(/rgba?\([^)]+\)/);
+    const color = colorMatch ? parseColor(colorMatch[0]) : { r: 0, g: 0, b: 0, a: 0.25 };
+
+    // Ekstrak nilai numerik (offsetX, offsetY, blur, spread)
+    const withoutColor = cleaned.replace(/rgba?\([^)]+\)/, '').trim();
+    const values = withoutColor.match(/-?[\d.]+/g)?.map(Number) || [0, 0, 0, 0];
+
+    shadows.push({
+      type: isInset ? 'INNER_SHADOW' : 'DROP_SHADOW',
+      offsetX: values[0] || 0,
+      offsetY: values[1] || 0,
+      blur: values[2] || 0,
+      spread: values[3] || 0,
+      color,
+    });
+  }
+
+  return shadows;
+}
+```
+
+### Parsing Linear-Gradient
+
+```typescript
+/**
+ * Parsing CSS linear-gradient menjadi objek gradient untuk Figma.
+ *
+ * Format CSS: linear-gradient(direction, color-stop1, color-stop2, ...)
+ * Contoh: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+ *
+ * @param raw - String background-image dari getComputedStyle
+ * @returns Objek gradient atau null jika bukan gradient
+ */
+function parseLinearGradient(raw: string): GradientData | null {
+  const match = raw.match(/linear-gradient\((.+)\)/);
+  if (!match) return null;
+
+  const content = match[1];
+
+  // Pisahkan angle dari color stops
+  // Angle bisa: "135deg", "to right", "to bottom left"
+  const parts = content.split(/,(?![^(]*\))/);
+  let angleDeg = 180; // Default: top to bottom
+  let colorStopStart = 0;
+
+  const firstPart = parts[0].trim();
+  if (firstPart.endsWith('deg')) {
+    angleDeg = parseFloat(firstPart);
+    colorStopStart = 1;
+  } else if (firstPart.startsWith('to ')) {
+    // Map keyword directions ke derajat
+    const dirMap: Record<string, number> = {
+      'to top': 0, 'to right': 90, 'to bottom': 180, 'to left': 270,
+      'to top right': 45, 'to bottom right': 135,
+      'to bottom left': 225, 'to top left': 315,
+    };
+    angleDeg = dirMap[firstPart] ?? 180;
+    colorStopStart = 1;
+  }
+
+  // Parse color stops
+  const colorStops: GradientStop[] = [];
+  for (let i = colorStopStart; i < parts.length; i++) {
+    const stopPart = parts[i].trim();
+    const colorMatch = stopPart.match(/rgba?\([^)]+\)|#[0-9a-fA-F]{3,8}/);
+    const positionMatch = stopPart.match(/([\d.]+)%/);
+
+    if (colorMatch) {
+      colorStops.push({
+        color: parseColor(colorMatch[0]),
+        position: positionMatch ? parseFloat(positionMatch[1]) / 100 : i / (parts.length - 1),
+      });
+    }
+  }
+
+  return { angleDeg, colorStops };
+}
+```
 
 ---
 
-### Ringkasan Data Flow (Versi Singkat)
+## 4. 📋 Clipboard API Injection
+
+### Konsep: MIME Figma di Clipboard
+
+Saat pengguna melakukan Paste (Ctrl+V) di Figma, Figma memeriksa clipboard OS untuk format data tertentu. Jika ditemukan payload dengan format yang dikenali, Figma langsung membuat node tree tanpa memerlukan plugin.
+
+### Mekanisme Teknis
+
+```typescript
+/**
+ * Menulis payload design tree ke clipboard OS dalam format yang dikenali Figma.
+ *
+ * Figma menggunakan MIME type khusus untuk clipboard. Payload berisi
+ * representasi JSON dari node tree yang akan di-paste.
+ *
+ * @param payload - Tree node Figma yang sudah di-konversi dari DOM
+ */
+async function writeToClipboard(payload: FigmaClipboardPayload): Promise<void> {
+  const jsonString = JSON.stringify(payload);
+
+  try {
+    // Metode 1: Tulis sebagai MIME khusus Figma
+    // Figma mengenali format web (HTML) yang berisi metadata Figma
+    const htmlPayload = buildFigmaHtmlPayload(payload);
+
+    const clipboardItem = new ClipboardItem({
+      'text/html': new Blob([htmlPayload], { type: 'text/html' }),
+      'text/plain': new Blob([jsonString], { type: 'text/plain' }),
+    });
+
+    await navigator.clipboard.write([clipboardItem]);
+    console.log('[CodeToFrame] Payload berhasil ditulis ke clipboard.');
+
+  } catch (error) {
+    console.warn('[CodeToFrame] Gagal menulis MIME khusus, fallback ke text/plain:', error);
+
+    // Metode 2: Fallback — tulis sebagai teks JSON biasa
+    // Masih bisa digunakan dengan plugin v1.0 (manual paste ke textarea)
+    await navigator.clipboard.writeText(jsonString);
+  }
+}
+```
+
+### Strategi Encoding Payload
+
+Ada dua pendekatan yang sedang dieksplorasi:
+
+#### Pendekatan A: HTML dengan Metadata Figma Embedded
+
+Figma mendukung paste dari HTML. Saat menerima paste HTML, Figma mengonversinya menjadi Frame + Text nodes. Kita bisa memperkaya HTML ini dengan metadata styling yang lebih akurat:
+
+```typescript
+function buildFigmaHtmlPayload(tree: FigmaNodeTree): string {
+  // Bangun HTML string dengan inline styles yang akurat
+  // Figma akan membaca HTML dan membuat nodes berdasarkan struktur + styling
+  return renderTreeToHtml(tree);
+}
+```
+
+**Keuntungan:** Tidak perlu reverse-engineer format internal Figma.
+**Kelemahan:** Fidelitas terbatas pada kemampuan Figma meng-parse HTML.
+
+#### Pendekatan B: Format Clipboard Internal Figma
+
+Jika kita bisa mengetahui format clipboard internal Figma (melalui analisis paste event di plugin development), kita bisa menulis payload yang langsung dikenali:
+
+```typescript
+// Format ini perlu di-reverse-engineer dari Figma clipboard
+const figmaPayload = {
+  type: 'FIGMA_CLIPBOARD',
+  version: '2',
+  nodes: convertTreeToFigmaFormat(tree),
+};
+```
+
+**Keuntungan:** Fidelitas maksimal — semua properti Figma bisa di-set.
+**Kelemahan:** Format internal bisa berubah tanpa pemberitahuan.
+
+#### Pendekatan C: Hybrid (Direkomendasikan)
+
+Tulis kedua format ke clipboard:
+1. `text/html` → HTML terstruktur dengan inline styles (untuk paste langsung).
+2. `text/plain` → JSON string (untuk paste ke plugin v1.0 sebagai fallback).
+
+```typescript
+const clipboardItem = new ClipboardItem({
+  'text/html': new Blob([htmlPayload], { type: 'text/html' }),
+  'text/plain': new Blob([jsonPayload], { type: 'text/plain' }),
+});
+```
+
+### Persyaratan Permission
+
+```json
+// manifest.json
+{
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "clipboardWrite"
+  ]
+}
+```
+
+### Error Handling Clipboard
+
+| Skenario Error | Penanganan |
+|---|---|
+| `NotAllowedError` (permission denied) | Tampilkan instruksi untuk mengizinkan clipboard access |
+| `SecurityError` (non-HTTPS page) | Fallback ke `document.execCommand('copy')` (deprecated tapi masih works) |
+| `DataCloneError` (payload terlalu besar) | Chunk payload atau reduce node count, tampilkan warning |
+| Browser lama tanpa `ClipboardItem` | Fallback ke `writeText()` + JSON string |
+
+---
+
+## 5. 🧱 Module Architecture
+
+### Prinsip Modularisasi
+
+Kode dibagi berdasarkan **tanggung jawab tunggal** (*Single Responsibility Principle*). Setiap modul bisa diuji secara independen dan diganti tanpa memengaruhi modul lain.
+
+### Peta Modul
+
+```
+browser-extension/src/
+│
+├── content/                     ← CONTENT SCRIPT MODULES
+│   │
+│   ├── entry.ts                 ← Entry point: mendengarkan pesan dari popup,
+│   │                               memulai pipeline extraction
+│   │
+│   ├── dom-traverser.ts         ← MODULE 1: Recursive DOM Traversal
+│   │   │
+│   │   │  Tanggung jawab:
+│   │   │  • Menelusuri DOM tree secara rekursif dari document.body
+│   │   │  • Memfilter elemen berdasarkan visibilitas
+│   │   │  • Membangun tree bersarang (parent-child relationships)
+│   │   │  • Menjaga z-order (urutan tumpukan visual)
+│   │   │  • Menerapkan batas kedalaman (MAX_DEPTH) dan node count (MAX_NODES)
+│   │   │
+│   │   │  Input:  HTMLElement (root node)
+│   │   │  Output: DOMNodeTree (intermediate tree representation)
+│   │   │
+│   │   └──────────────────────
+│   │
+│   ├── style-extractor.ts       ← MODULE 2: CSS Property Extraction
+│   │   │
+│   │   │  Tanggung jawab:
+│   │   │  • Membaca getComputedStyle() untuk setiap elemen
+│   │   │  • Mengekstrak background (solid color, gradient, image URL)
+│   │   │  • Mengekstrak border (width, color, style, radius)
+│   │   │  • Mengekstrak box-shadow (multiple shadows, inset)
+│   │   │  • Mengekstrak opacity
+│   │   │  • Mengekstrak typography (font-family, size, weight, line-height, dll.)
+│   │   │  • Mendeteksi flexbox layout properties
+│   │   │
+│   │   │  Input:  HTMLElement
+│   │   │  Output: ExtractedStyles (typed object dengan semua properti)
+│   │   │
+│   │   └──────────────────────
+│   │
+│   ├── figma-mapper.ts          ← MODULE 3: DOM → Figma Node Conversion
+│   │   │
+│   │   │  Tanggung jawab:
+│   │   │  • Mengonversi DOMNodeTree → FigmaNodeTree
+│   │   │  • Memetakan tipe elemen (div→FRAME, p→TEXT, img→IMAGE, svg→VECTOR)
+│   │   │  • Memetakan CSS properties → Figma properties
+│   │   │  • Menghitung posisi relatif (child relative to parent)
+│   │   │  • Menerapkan smart layer naming (tag.class#id)
+│   │   │  • Mendeteksi dan menetapkan Auto Layout (flex→layoutMode)
+│   │   │
+│   │   │  Input:  DOMNodeTree + ExtractedStyles
+│   │   │  Output: FigmaNodeTree (siap untuk clipboard)
+│   │   │
+│   │   └──────────────────────
+│   │
+│   └── (index.ts)               ← Re-export semua modul content script
+│
+├── clipboard/                   ← CLIPBOARD MODULE
+│   │
+│   └── clipboard-writer.ts      ← MODULE 4: Clipboard Payload Writer
+│       │
+│       │  Tanggung jawab:
+│       │  • Menerima FigmaNodeTree dari figma-mapper
+│       │  • Mengonversi tree → HTML string (dengan inline styles)
+│       │  • Mengonversi tree → JSON string (fallback)
+│       │  • Menulis ke clipboard via navigator.clipboard.write()
+│       │  • Menangani error dan fallback
+│       │
+│       │  Input:  FigmaNodeTree
+│       │  Output: void (side effect: data masuk ke clipboard)
+│       │
+│       └──────────────────────
+│
+├── utils/                       ← UTILITY MODULES (pure functions)
+│   ├── color-parser.ts          ← parseColor(str) → RGBA
+│   ├── gradient-parser.ts       ← parseLinearGradient(str) → GradientData
+│   ├── shadow-parser.ts         ← parseBoxShadow(str) → ShadowEffect[]
+│   └── font-mapper.ts           ← mapFontWeight(weight) → FigmaFontStyle
+│
+├── popup/                       ← POPUP UI
+│   ├── popup.html               ← Tampilan popup (tombol + status)
+│   ├── popup.ts                 ← Logika popup (mengirim pesan ke content script)
+│   └── popup.css                ← Styling popup
+│
+└── types/                       ← TYPE DEFINITIONS
+    └── schema.ts                ← Semua TypeScript interfaces (v2.0 schema)
+```
+
+### Alur Data Antar Modul
+
+```
+popup.ts
+    │
+    │ chrome.tabs.sendMessage({ type: 'EXTRACT' })
+    ▼
+entry.ts (content script)
+    │
+    │ 1. Menerima pesan
+    │ 2. Memanggil pipeline
+    ▼
+dom-traverser.ts ──► style-extractor.ts ──► figma-mapper.ts ──► clipboard-writer.ts
+    │                    │                     │                      │
+    │ Bangun DOM tree    │ Ekstrak CSS         │ Konversi ke          │ Tulis ke
+    │ bersarang          │ properties          │ Figma format         │ clipboard
+    │                    │                     │                      │
+    ▼                    ▼                     ▼                      ▼
+DOMNodeTree         ExtractedStyles      FigmaNodeTree           OS Clipboard
+```
+
+### Kontrak Antar Modul (Interface)
+
+```typescript
+// ═══ Module 1 Output: DOMNodeTree ═══
+interface DOMNodeInfo {
+  element: HTMLElement;
+  tagName: string;
+  rect: DOMRect;
+  computedStyle: CSSStyleDeclaration;
+  children: DOMNodeInfo[];
+}
+
+// ═══ Module 2 Output: ExtractedStyles ═══
+interface ExtractedStyles {
+  backgroundColor: RGBA;
+  backgroundGradient: GradientData | null;
+  backgroundImageUrl: string | null;
+  border: BorderData;
+  borderRadius: CornerRadii;
+  boxShadow: ShadowEffect[];
+  opacity: number;
+  overflow: 'visible' | 'hidden' | 'scroll' | 'auto';
+  typography: TypographyData | null;  // null jika bukan elemen teks
+  layout: LayoutData;
+}
+
+// ═══ Module 3 Output: FigmaNodeTree ═══
+interface FigmaNode {
+  type: 'FRAME' | 'TEXT' | 'IMAGE' | 'VECTOR';
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  styles: FigmaStyles;
+  layout?: FigmaLayoutProps;
+  textContent?: string;
+  typography?: FigmaTypography;
+  imageUrl?: string;
+  svgContent?: string;
+  children: FigmaNode[];
+}
+```
+
+---
+
+## 6. 🔄 Data Flow
+
+### Diagram Alur Lengkap v2.0
+
+```
+                     BROWSER CHROME
+┌──────────────────────────────────────────────────────────────────────────┐
+│                                                                          │
+│  ┌──────────┐     ┌──────────────────────────────────────────────────┐  │
+│  │  Popup   │────►│              CONTENT SCRIPT PIPELINE             │  │
+│  │  UI      │     │                                                  │  │
+│  └──────────┘     │  ①               ②                ③             │  │
+│       ▲           │  DOM          Style             Figma            │  │
+│       │           │  Traverser ──► Extractor ──────► Mapper          │  │
+│       │           │  (recursive)   (getComputed     (DOM→Figma      │  │
+│       │           │                 Style)           node tree)      │  │
+│       │           │                                    │             │  │
+│       │           └────────────────────────────────────┼─────────────┘  │
+│       │                                                │                │
+│       │  ⑤ Status update                               │ ④              │
+│       │  (success/error count)                         ▼                │
+│       │                                     ┌──────────────────┐        │
+│       └─────────────────────────────────────│ Clipboard Writer │        │
+│                                             │ (MIME encoding)  │        │
+│                                             └────────┬─────────┘        │
+│                                                      │                  │
+└──────────────────────────────────────────────────────┼──────────────────┘
+                                                       │
+                                            ┌──────────▼──────────┐
+                                            │   OS Clipboard      │
+                                            │ ┌─────────────────┐ │
+                                            │ │ text/html       │ │
+                                            │ │ (styled HTML)   │ │
+                                            │ ├─────────────────┤ │
+                                            │ │ text/plain      │ │
+                                            │ │ (JSON fallback) │ │
+                                            │ └─────────────────┘ │
+                                            └──────────┬──────────┘
+                                                       │
+                                                Ctrl+V / Cmd+V
+                                                       │
+                                            ┌──────────▼──────────┐
+                                            │   FIGMA CANVAS      │
+                                            │                     │
+                                            │  ┌──────────────┐  │
+                                            │  │ Root Frame    │  │
+                                            │  │  ├─ Header    │  │
+                                            │  │  │  ├─ Logo   │  │
+                                            │  │  │  └─ Nav    │  │
+                                            │  │  ├─ Hero      │  │
+                                            │  │  │  ├─ Title  │  │
+                                            │  │  │  └─ Image  │  │
+                                            │  │  └─ Footer    │  │
+                                            │  └──────────────┘  │
+                                            │       🎉            │
+                                            └─────────────────────┘
+```
+
+### Ringkasan Data Flow (Tabel)
 
 | Langkah | Dari | Ke | Data | Mekanisme |
 |:---:|---|---|---|---|
-| ① | Halaman Web (DOM) | Content Script | Properti CSS + posisi elemen | DOM API |
-| ② | Content Script | Popup | Objek `CodeToFrameData` | Chrome Message Passing |
-| ③ | Popup | Clipboard | String JSON | `navigator.clipboard` |
-| ④ | Clipboard | Plugin UI | String JSON | Manual copy-paste |
-| ⑤ | Plugin UI | Plugin Sandbox | Objek `CodeToFrameData` | `postMessage()` |
-| ⑥ | Plugin Sandbox | Kanvas Figma | Rectangle & Text nodes | Figma Plugin API |
+| ① | Halaman Web (DOM) | DOM Traverser | HTMLElement tree | Recursive traversal |
+| ② | DOM Traverser | Style Extractor | DOMNodeInfo tree | Function call |
+| ③ | Style Extractor | Figma Mapper | ExtractedStyles per node | Function call |
+| ④ | Figma Mapper | Clipboard Writer | FigmaNodeTree | Function call |
+| ⑤ | Clipboard Writer | OS Clipboard | HTML + JSON (dual MIME) | Clipboard API |
+| ⑥ | OS Clipboard | Figma Canvas | Nested Frames + styling | User paste (Ctrl+V) |
 
 ---
 
-*Semoga dokumen ini membantu kamu memahami "gambaran besar" proyek CodeToFrame. Jangan ragu untuk bertanya jika ada bagian yang membingungkan. Ingat: tidak ada pertanyaan yang bodoh — yang penting kamu terus belajar! 🚀*
+## 7. 📝 Naming Conventions
+
+Tetap sama dengan v1.0, dengan tambahan:
+
+### File & Folder
+
+| Jenis | Format | Contoh |
+|---|---|---|
+| Folder | `kebab-case` | `content/`, `clipboard/`, `utils/` |
+| File TypeScript | `kebab-case.ts` | `dom-traverser.ts`, `style-extractor.ts` |
+| File HTML | `kebab-case.html` | `popup.html` |
+
+### TypeScript Naming
+
+| Jenis | Format | Contoh |
+|---|---|---|
+| Interface | `PascalCase` | `FigmaNode`, `ExtractedStyles`, `DOMNodeInfo` |
+| Type Alias | `PascalCase` | `FigmaNodeTree`, `RGBA` |
+| Fungsi | `camelCase` | `traverseDOM()`, `extractStyles()`, `mapToFigma()` |
+| Konstanta | `UPPER_SNAKE_CASE` | `MAX_DEPTH`, `MAX_NODES`, `SKIP_TAGS` |
+
+### Layer Naming di Figma
+
+Format: `<tag>.<class-utama>#<id>`
+
+```
+div.container              ← div dengan class "container"
+h1#main-title              ← h1 dengan id "main-title"
+button.btn.btn-primary     ← button dengan 2 class
+img.hero-image             ← image dengan class
+p                          ← paragraph tanpa class/id
+```
+
+---
+
+*Arsitektur v2.0 dirancang untuk menghasilkan konversi web-to-Figma yang akurat, terstruktur, dan mudah diperluas. Setiap modul berdiri sendiri, bisa diuji mandiri, dan memiliki kontrak input/output yang jelas. 🚀*
