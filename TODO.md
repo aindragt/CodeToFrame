@@ -1,1739 +1,1006 @@
-# 📋 TODO.md — Master Execution Plan: CodeToFrame MVP (v1.0)
+# 📋 TODO.md — Granular Execution Plan for CodeToFrame v2.0
 
-> **Dibuat:** 10 Agustus 2026  
-> **Status:** Aktif — Panduan eksekusi teknis utama  
-> **Estimasi Total:** 7–11 hari kerja  
-> **Repositori:** [github.com/aindragt/CodeToFrame](https://github.com/aindragt/CodeToFrame)
+> **Versi:** 2.0  
+> **Terakhir diperbarui:** 12 Agustus 2026  
+> **Cara Menggunakan:** Kerjakan tugas secara **berurutan** dari atas ke bawah. Setiap tugas memiliki Task ID unik. Tandai `[x]` saat selesai.
 
 ---
 
-## Cara Membaca Dokumen Ini
-
-Setiap tugas ditulis dalam format berikut:
+## Legenda Status
 
 ```
-- [ ] **[Nama Tugas Utama]**
-  - Sub-tasks: langkah-langkah konkret yang harus dikerjakan
-  - Definition of Done (DoD): kapan tugas ini dianggap 100% selesai
-  - Edge Cases to Handle: potensi bug yang harus diantisipasi
+[ ] = Belum dikerjakan
+[/] = Sedang dikerjakan
+[x] = Selesai
+[!] = Diblokir (butuh tugas lain selesai dulu)
 ```
 
-**Simbol status:**
-- `[ ]` → Belum dikerjakan
-- `[/]` → Sedang dikerjakan (in progress)
-- `[x]` → Selesai
+---
 
-**Aturan penting:**
-- Kerjakan fase **secara berurutan** (Phase 0 → 1 → 2 → dst.). Fase selanjutnya bergantung pada fase sebelumnya.
-- Dalam satu fase, tugas-tugas boleh dikerjakan **paralel** kecuali ada catatan ketergantungan eksplisit.
-- Setiap kali menyelesaikan satu tugas, **commit** perubahannya ke Git dengan pesan yang deskriptif.
+## Fase 0: Restrukturisasi Proyek
+
+> **Tujuan:** Mengubah struktur folder dari v1.0 (TypeScript, dual-project) menjadi v2.0 (JavaScript, single-project). Setelah fase ini, fondasi folder dan konfigurasi build sudah siap.
 
 ---
 
-## Daftar Fase
+### `T0.1` — Buat Struktur Direktori Baru
 
-| Fase | Nama | Fokus |
-|:---:|---|---|
-| 0 | [Repository Setup & Environment](#phase-0--repository-setup--environment) | Fondasi proyek, folder, konfigurasi build tools |
-| 1 | [Shared Data Contracts](#phase-1--shared-data-contracts-json-schema) | Interface TypeScript untuk kontrak data JSON |
-| 2 | [Chrome Extension Core](#phase-2--chrome-extension-core-dom-extraction-engine) | Mesin ekstraksi DOM dari halaman web |
-| 3 | [Chrome Extension UI & Data Export](#phase-3--chrome-extension-ui--data-export) | Popup ekstensi, tombol extract, copy to clipboard |
-| 4 | [Figma Plugin Core](#phase-4--figma-plugin-core-rendering-engine) | Mesin render elemen di kanvas Figma |
-| 5 | [Figma Plugin UI & Message Handler](#phase-5--figma-plugin-ui--message-handler) | Antarmuka plugin, textarea, tombol generate |
-| 6 | [End-to-End Integration Testing & QA](#phase-6--end-to-end-integration-testing--quality-assurance) | Pengujian menyeluruh, bug fixing, polish |
-
----
-
-## Phase 0 — Repository Setup & Environment
-
-> **Tujuan:** Menyiapkan seluruh fondasi proyek sehingga tim bisa langsung mulai ngoding tanpa hambatan konfigurasi.  
-> **Estimasi:** 1 hari kerja
+- [ ] **Selesai**
+- **File Target:** Folder-folder baru di `browser-extension/src/`
+- **Instruksi:**
+  1. Buat folder `browser-extension/src/content/` (jika belum ada).
+  2. Buat folder `browser-extension/src/clipboard/`.
+  3. Buat folder `browser-extension/src/utils/`.
+  4. Buat folder `browser-extension/src/types/`.
+  5. Pastikan folder `browser-extension/src/popup/` sudah ada.
+  6. Buat folder `test/` di root proyek untuk file pengujian.
+- **Acceptance Criteria:**
+  - Semua 6 folder ada dan bisa diakses.
+  - Tidak ada file lama yang terhapus — biarkan kode v1.0 tetap ada sampai migrasi selesai.
 
 ---
 
-### 0.1 Struktur Folder Root
+### `T0.2` — Konfigurasi Vite untuk Build JavaScript
 
-- [ ] **Buat struktur folder utama repositori**
-  - *Sub-tasks:*
-    - Buat folder `browser-extension/` di root repositori.
-    - Buat folder `figma-plugin/` di root repositori.
-    - Buat folder `shared/types/` di root repositori (untuk persiapan masa depan — boleh kosong dulu, atau berisi placeholder `schema.ts`).
-    - Pastikan file dokumentasi berikut sudah ada di root: `README.md`, `PRD.md`, `ARCHITECTURE.md`, `AGENTS.md`, `SKILL.md`, `TODO.md`.
-  - *Definition of Done (DoD):*
-    - Perintah `ls` di root menampilkan folder `browser-extension/`, `figma-plugin/`, dan `shared/`.
-    - Semua file dokumentasi ada dan bisa dibuka.
-  - *Edge Cases to Handle:*
-    - Pastikan nama folder menggunakan `kebab-case` (bukan `BrowserExtension` atau `browser_extension`).
-
----
-
-### 0.2 Git Ignore
-
-- [ ] **Buat file `.gitignore` di root repositori**
-  - *Sub-tasks:*
-    - Tambahkan entry untuk folder `node_modules/` (di semua level).
-    - Tambahkan entry untuk folder `dist/` (di semua level).
-    - Tambahkan entry untuk file log (`*.log`, `npm-debug.log*`).
-    - Tambahkan entry untuk file OS (`Thumbs.db`, `.DS_Store`).
-    - Tambahkan entry untuk file editor/IDE (`.vscode/`, `.idea/`).
-    - Tambahkan entry untuk file environment (`.env`, `.env.local`).
-  - *Definition of Done (DoD):*
-    - `git status` tidak menampilkan `node_modules/` atau `dist/` setelah install dan build.
-  - *Edge Cases to Handle:*
-    - Jika `dist/` atau `node_modules/` sudah pernah ter-commit sebelumnya, jalankan `git rm -r --cached dist/` lalu commit ulang.
+- [ ] **Selesai**
+- **File Target:** `browser-extension/vite.config.js`
+- **Instruksi:**
+  1. Buat file `vite.config.js` (mengganti `vite.config.ts` jika ada).
+  2. Konfigurasi multi-entry build:
+     - Entry 1: `src/popup/popup.html` → output `popup.html` + `popup.js`
+     - Entry 2: `src/content/entry.js` → output `content.js` (single bundled file)
+  3. Set `build.outDir` ke `dist/`.
+  4. Set `build.emptyOutDir` ke `true`.
+  5. Set `publicDir` ke `public/` agar `manifest.json` dan ikon ter-copy otomatis.
+  6. Pastikan output content script berupa **satu file IIFE** (bukan ES module) karena Chrome content script tidak mendukung ES module.
+- **Acceptance Criteria:**
+  - `npm run build` berhasil tanpa error.
+  - Folder `dist/` berisi: `manifest.json`, `popup.html`, `popup.js`, `content.js`.
+  - `content.js` adalah single file tanpa `import` statement (sudah di-bundle oleh Vite).
 
 ---
 
-### 0.3 Browser Extension — Inisialisasi Proyek
+### `T0.3` — Update Manifest V3
 
-- [ ] **Inisialisasi proyek npm di `browser-extension/`**
-  - *Sub-tasks:*
-    - Jalankan `npm init -y` di dalam folder `browser-extension/`.
-    - Edit `package.json`: set `"name"` ke `"codetoframe-browser-extension"`, `"version"` ke `"1.0.0"`, `"private"` ke `true`.
-    - Tambahkan field `"scripts"`:
-      ```json
-      {
-        "dev": "vite build --watch",
-        "build": "tsc --noEmit && vite build",
-        "typecheck": "tsc --noEmit"
-      }
-      ```
-  - *Definition of Done (DoD):*
-    - File `browser-extension/package.json` ada dan valid (bisa di-parse JSON).
-    - `npm run typecheck` terdaftar sebagai script.
+- [ ] **Selesai**
+- **File Target:** `browser-extension/public/manifest.json`
+- **Instruksi:**
+  1. Update `content_scripts[0].js` dari `["extractor.js"]` menjadi `["content.js"]`.
+  2. Pastikan permissions berisi: `"activeTab"`, `"scripting"`, `"clipboardWrite"`.
+  3. Tambahkan field `"icons"` jika belum ada (16, 48, 128).
+  4. Set `"action.default_popup"` ke `"popup.html"`.
+- **Acceptance Criteria:**
+  - JSON valid (tidak ada trailing comma, format rapi).
+  - Extension bisa di-load di Chrome tanpa error permission.
 
 ---
 
-- [ ] **Install dependencies untuk Browser Extension**
-  - *Sub-tasks:*
-    - Install dev dependencies:
-      ```bash
-      cd browser-extension
-      npm install --save-dev typescript vite @types/chrome
-      ```
-    - Verifikasi: `node_modules/` muncul di `browser-extension/` dan `package-lock.json` ter-generate.
-  - *Definition of Done (DoD):*
-    - `npx tsc --version` menampilkan versi TypeScript yang valid.
-    - `npx vite --version` menampilkan versi Vite yang valid.
-    - `@types/chrome` tersedia untuk autocompletion API Chrome di editor.
-  - *Edge Cases to Handle:*
-    - Jika `npm install` gagal karena versi Node.js terlalu lama, pastikan Node.js versi **18 atau lebih baru** terinstall.
+## Fase 1: Setup Fondasi & Utilitas
+
+> **Tujuan:** Membangun fungsi-fungsi utilitas dasar yang akan digunakan oleh semua modul di fase selanjutnya. Setiap fungsi harus pure (tanpa side effect) dan mudah diuji.
 
 ---
 
-- [ ] **Buat `tsconfig.json` untuk Browser Extension**
-  - *Sub-tasks:*
-    - Buat file `browser-extension/tsconfig.json` dengan konfigurasi berikut:
-      ```json
-      {
-        "compilerOptions": {
-          "target": "ES2020",
-          "module": "ESNext",
-          "moduleResolution": "bundler",
-          "strict": true,
-          "noUnusedLocals": true,
-          "noUnusedParameters": true,
-          "noFallthroughCasesInSwitch": true,
-          "isolatedModules": true,
-          "esModuleInterop": true,
-          "skipLibCheck": true,
-          "forceConsistentCasingInFileNames": true,
-          "outDir": "./dist",
-          "rootDir": "./src",
-          "types": ["chrome"]
-        },
-        "include": ["src/**/*.ts"],
-        "exclude": ["node_modules", "dist"]
-      }
-      ```
-    - Pastikan `"strict": true` — ini wajib, tidak boleh diubah ke `false`.
-    - Pastikan `"types": ["chrome"]` — agar TypeScript mengenali API `chrome.*`.
-  - *Definition of Done (DoD):*
-    - Perintah `npx tsc --noEmit` berjalan tanpa error (dengan asumsi belum ada file `.ts` yang error).
-  - *Edge Cases to Handle:*
-    - Jika menggunakan path alias (misalnya `@/`), tambahkan `paths` di `compilerOptions`. Untuk MVP, hindari path alias agar tetap sederhana.
+### `T1.1` — JSDoc Type Definitions
+
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/types/schema.js`
+- **Instruksi:**
+  1. Definisikan semua `@typedef` menggunakan JSDoc (bukan TypeScript interface).
+  2. Tipe yang harus dibuat:
+
+  ```javascript
+  /**
+   * @typedef {Object} RGBA
+   * @property {number} r - Red (0-255)
+   * @property {number} g - Green (0-255)
+   * @property {number} b - Blue (0-255)
+   * @property {number} a - Alpha (0-1)
+   */
+
+  /**
+   * @typedef {Object} GradientStop
+   * @property {RGBA} color
+   * @property {number} position - Posisi stop (0-1)
+   */
+
+  /**
+   * @typedef {Object} GradientData
+   * @property {number} angleDeg - Sudut gradient dalam derajat
+   * @property {GradientStop[]} colorStops
+   */
+
+  /**
+   * @typedef {Object} ShadowEffect
+   * @property {'DROP_SHADOW'|'INNER_SHADOW'} type
+   * @property {number} offsetX
+   * @property {number} offsetY
+   * @property {number} blur
+   * @property {number} spread
+   * @property {RGBA} color
+   */
+
+  /**
+   * @typedef {Object} BorderData
+   * @property {number} width
+   * @property {RGBA} color
+   * @property {'solid'|'dashed'|'dotted'|'none'} style
+   */
+
+  /**
+   * @typedef {Object} CornerRadii
+   * @property {number} topLeft
+   * @property {number} topRight
+   * @property {number} bottomRight
+   * @property {number} bottomLeft
+   */
+
+  /**
+   * @typedef {Object} TypographyData
+   * @property {string} fontFamily
+   * @property {number} fontSize
+   * @property {number} fontWeight
+   * @property {string} fontStyle - "Regular", "Bold", dll.
+   * @property {number|null} lineHeight - Dalam pixel, null jika "normal"
+   * @property {number} letterSpacing - Dalam pixel
+   * @property {'LEFT'|'CENTER'|'RIGHT'|'JUSTIFIED'} textAlign
+   * @property {'NONE'|'UNDERLINE'|'STRIKETHROUGH'} textDecoration
+   */
+
+  /**
+   * @typedef {Object} LayoutData
+   * @property {'NONE'|'FLEX'} mode
+   * @property {'ROW'|'COLUMN'} direction
+   * @property {number} gap
+   * @property {{top: number, right: number, bottom: number, left: number}} padding
+   * @property {string} justifyContent
+   * @property {string} alignItems
+   * @property {boolean} wrap
+   */
+
+  /**
+   * @typedef {Object} ExtractedStyles
+   * @property {RGBA|null} backgroundColor
+   * @property {GradientData|null} backgroundGradient
+   * @property {string|null} backgroundImageUrl
+   * @property {BorderData} border
+   * @property {CornerRadii} borderRadius
+   * @property {ShadowEffect[]} boxShadow
+   * @property {number} opacity
+   * @property {'visible'|'hidden'|'scroll'|'auto'} overflow
+   * @property {TypographyData|null} typography
+   * @property {LayoutData} layout
+   * @property {RGBA|null} textColor
+   */
+
+  /**
+   * @typedef {Object} FigmaNode
+   * @property {'FRAME'|'TEXT'|'IMAGE'|'VECTOR'} type
+   * @property {string} name
+   * @property {number} x
+   * @property {number} y
+   * @property {number} width
+   * @property {number} height
+   * @property {ExtractedStyles} styles
+   * @property {LayoutData} [layout]
+   * @property {string} [textContent]
+   * @property {TypographyData} [typography]
+   * @property {string} [imageUrl]
+   * @property {string} [svgContent]
+   * @property {FigmaNode[]} children
+   */
+
+  /**
+   * @typedef {Object} ExtractionPayload
+   * @property {string} version
+   * @property {string} sourceUrl
+   * @property {{width: number, height: number, scrollX: number, scrollY: number}} viewport
+   * @property {FigmaNode} rootNode
+   */
+  ```
+
+- **Acceptance Criteria:**
+  - File hanya berisi `@typedef` — tidak ada logika eksekusi.
+  - Semua tipe yang dirujuk di `ARCHITECTURE.md` tercakup.
+  - File bisa di-import di modul lain untuk type-hinting: `/** @type {import('../types/schema.js').RGBA} */`
 
 ---
 
-- [ ] **Buat `vite.config.ts` untuk Browser Extension**
-  - *Sub-tasks:*
-    - Buat file `browser-extension/vite.config.ts` dengan konfigurasi multi-entry point:
-      ```typescript
-      import { defineConfig } from 'vite';
-      import { resolve } from 'path';
+### `T1.2` — Color Parser (RGB, RGBA, HEX)
 
-      export default defineConfig({
-        build: {
-          outDir: 'dist',
-          emptyDirBeforeWrite: true,
-          rollupOptions: {
-            input: {
-              popup: resolve(__dirname, 'src/popup/popup.html'),
-              content: resolve(__dirname, 'src/content/extractor.ts'),
-              'service-worker': resolve(__dirname, 'src/background/service-worker.ts'),
-            },
-            output: {
-              entryFileNames: '[name].js',
-              chunkFileNames: '[name].js',
-              assetFileNames: '[name].[ext]',
-            },
-          },
-        },
-        publicDir: 'public',
-      });
-      ```
-    - **Catatan penting:** Konfigurasi entry point di atas perlu disesuaikan saat file-file sumber sudah benar-benar dibuat. Ini adalah *starting point* yang akan diiterasi.
-  - *Definition of Done (DoD):*
-    - Perintah `npx vite build` berjalan tanpa error (bisa gagal jika file entry belum ada — ini normal di fase ini, akan diverifikasi ulang di Phase 2).
-  - *Edge Cases to Handle:*
-    - Content Script harus di-build sebagai IIFE (bukan ES module) agar bisa diinjeksi ke halaman web. Mungkin perlu konfigurasi tambahan di `rollupOptions.output.format`.
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/utils/color-parser.js`
+- **Instruksi:**
+  1. Buat fungsi `parseColor(rawString)` yang mengembalikan objek `RGBA` atau `null`.
+  2. Format yang **harus** didukung:
+     - `rgb(255, 128, 0)` → `{ r: 255, g: 128, b: 0, a: 1 }`
+     - `rgba(255, 128, 0, 0.5)` → `{ r: 255, g: 128, b: 0, a: 0.5 }`
+     - `#FF8000` → `{ r: 255, g: 128, b: 0, a: 1 }`
+     - `#F80` (3-digit shorthand) → `{ r: 255, g: 136, b: 0, a: 1 }`
+     - `#FF800080` (8-digit with alpha) → `{ r: 255, g: 128, b: 0, a: 0.502 }`
+     - `transparent` → `{ r: 0, g: 0, b: 0, a: 0 }`
+  3. Input kosong, `null`, `undefined` → return `null`.
+  4. Warna CSS named (seperti "red", "blue") → **TIDAK perlu didukung** di v2.0. Return `null`.
+  5. Clamp semua nilai: r/g/b ke 0-255, alpha ke 0-1.
+  6. Export sebagai named export: `export { parseColor }`.
+- **Acceptance Criteria:**
+  - Semua 6 format di atas menghasilkan output yang benar.
+  - Input tidak valid mengembalikan `null` (bukan throw error).
+  - Fungsi adalah **pure function** — tidak mengakses DOM atau global state.
 
 ---
 
-### 0.4 Figma Plugin — Inisialisasi Proyek
+### `T1.3` — Gradient Parser
 
-- [ ] **Inisialisasi proyek npm di `figma-plugin/`**
-  - *Sub-tasks:*
-    - Jalankan `npm init -y` di dalam folder `figma-plugin/`.
-    - Edit `package.json`: set `"name"` ke `"codetoframe-figma-plugin"`, `"version"` ke `"1.0.0"`, `"private"` ke `true`.
-    - Tambahkan field `"scripts"`:
-      ```json
-      {
-        "dev": "tsc --watch",
-        "build": "tsc",
-        "typecheck": "tsc --noEmit"
-      }
-      ```
-    - **Catatan:** Figma plugin tidak perlu Vite — cukup compile TypeScript langsung ke JavaScript. UI-nya (HTML/CSS) tidak perlu di-build.
-  - *Definition of Done (DoD):*
-    - File `figma-plugin/package.json` ada dan valid.
-
----
-
-- [ ] **Install dependencies untuk Figma Plugin**
-  - *Sub-tasks:*
-    - Install dev dependencies:
-      ```bash
-      cd figma-plugin
-      npm install --save-dev typescript @figma/plugin-typings
-      ```
-    - `@figma/plugin-typings` menyediakan type definitions untuk Figma Plugin API (`figma.*`, `SceneNode`, dll.).
-  - *Definition of Done (DoD):*
-    - `npx tsc --version` menampilkan versi TypeScript yang valid.
-    - IntelliSense di editor bisa mengenali `figma.createRectangle()` dan API Figma lainnya.
-  - *Edge Cases to Handle:*
-    - **JANGAN** install `@figma/plugin-typings` sebagai `dependencies` biasa (harus `devDependencies`). Figma plugin sandbox tidak bisa mengakses `node_modules` saat runtime.
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/utils/gradient-parser.js`
+- **Instruksi:**
+  1. Buat fungsi `parseLinearGradient(rawString)` yang mengembalikan objek `GradientData` atau `null`.
+  2. Format yang harus didukung:
+     - `linear-gradient(135deg, #667eea 0%, #764ba2 100%)`
+     - `linear-gradient(to right, red, blue)` → arah `to right` = 90deg
+     - `linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,1) 100%)`
+  3. Jika input bukan `linear-gradient(...)` → return `null`.
+  4. `radial-gradient` → return `null` (tidak didukung di v2.0).
+  5. Gunakan `parseColor()` dari `color-parser.js` untuk parsing setiap color stop.
+  6. Mapping keyword arah ke derajat:
+     - `to top` = 0, `to right` = 90, `to bottom` = 180, `to left` = 270
+     - `to top right` = 45, `to bottom right` = 135, dll.
+- **Acceptance Criteria:**
+  - Gradient dengan 2+ color stops bisa di-parse.
+  - Sudut dalam derajat (number).
+  - Posisi setiap stop berupa angka 0-1 (bukan persentase).
+  - Input bukan gradient → `null`.
 
 ---
 
-- [ ] **Buat `tsconfig.json` untuk Figma Plugin**
-  - *Sub-tasks:*
-    - Buat file `figma-plugin/tsconfig.json`:
-      ```json
-      {
-        "compilerOptions": {
-          "target": "ES2020",
-          "module": "None",
-          "strict": true,
-          "noUnusedLocals": true,
-          "noUnusedParameters": true,
-          "noFallthroughCasesInSwitch": true,
-          "skipLibCheck": true,
-          "forceConsistentCasingInFileNames": true,
-          "outDir": "./dist",
-          "rootDir": "./src",
-          "typeRoots": ["./node_modules/@figma"]
-        },
-        "include": ["src/**/*.ts"],
-        "exclude": ["node_modules", "dist"]
-      }
-      ```
-    - **Catatan tentang `"module": "None"`:** Plugin Figma berjalan di sandbox yang **tidak mendukung ES modules**. Semua kode harus di-compile menjadi satu file tanpa `import`/`export` runtime (atau gunakan bundler jika dibutuhkan). Alternatif: gunakan `"module": "CommonJS"` lalu bundle dengan esbuild/rollup.
-  - *Definition of Done (DoD):*
-    - `npx tsc --noEmit` berjalan tanpa error.
-  - *Edge Cases to Handle:*
-    - Jika ada error `Cannot find name 'figma'`, pastikan `typeRoots` atau `types` mengarah ke `@figma/plugin-typings` dengan benar. Coba tambahkan reference directive di file `.ts`: `/// <reference types="@figma/plugin-typings" />`
+### `T1.4` — Box Shadow Parser
+
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/utils/shadow-parser.js`
+- **Instruksi:**
+  1. Buat fungsi `parseBoxShadow(rawString)` yang mengembalikan array `ShadowEffect[]`.
+  2. Harus mendukung:
+     - Single shadow: `"0px 4px 6px rgba(0,0,0,0.1)"`
+     - Multiple shadows (dipisah koma): `"0px 4px 6px rgba(0,0,0,0.1), 0px 2px 4px rgba(0,0,0,0.06)"`
+     - Inset shadow: `"inset 0px 2px 4px rgba(0,0,0,0.1)"` → type = `'INNER_SHADOW'`
+     - Shadow dengan spread: `"0px 4px 6px -1px rgba(0,0,0,0.1)"` → spread = -1
+  3. **Kunci parsing:** Warna bisa di awal atau di akhir string shadow. Gunakan regex yang mendeteksi `rgb()`/`rgba()` terlebih dahulu, lalu parse sisa angka sebagai offset/blur/spread.
+  4. Input `"none"`, kosong, atau `null` → return `[]` (array kosong).
+- **Acceptance Criteria:**
+  - Single shadow → array berisi 1 objek.
+  - Multiple shadows → array berisi N objek sesuai jumlah shadow.
+  - Inset terdeteksi sebagai `type: 'INNER_SHADOW'`.
+  - Semua nilai numerik (offsetX, offsetY, blur, spread) bertipe number.
 
 ---
 
-- [ ] **Buat `manifest.json` untuk Figma Plugin**
-  - *Sub-tasks:*
-    - Buat file `figma-plugin/manifest.json`:
-      ```json
-      {
-        "name": "CodeToFrame",
-        "id": "000000000000000000",
-        "api": "1.0.0",
-        "main": "dist/plugin/controller.js",
-        "ui": "src/ui/ui.html",
-        "editorType": ["figma"]
-      }
-      ```
-    - **Catatan:** Field `"id"` akan diisi dengan ID asli saat plugin didaftarkan di Figma. Untuk development, gunakan placeholder.
-    - Field `"main"` mengarah ke file JavaScript hasil compile dari `controller.ts`.
-    - Field `"ui"` mengarah langsung ke file HTML (tidak perlu di-compile).
-  - *Definition of Done (DoD):*
-    - File `manifest.json` valid dan bisa di-parse JSON tanpa error.
-    - Path `"main"` dan `"ui"` sesuai dengan lokasi file yang akan dibuat.
-  - *Edge Cases to Handle:*
-    - Figma Desktop akan membaca `manifest.json` dari root folder plugin — pastikan file ini **TIDAK** di dalam `src/` atau `dist/`.
+### `T1.5` — Font Weight Mapper
+
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/utils/font-mapper.js`
+- **Instruksi:**
+  1. Buat fungsi `mapFontWeight(weightValue)` yang mengonversi CSS font-weight (number atau string) ke Figma font style name (string).
+  2. Tabel pemetaan:
+
+  | Input CSS | Output Figma |
+  |---|---|
+  | `100` atau `"100"` | `"Thin"` |
+  | `200` | `"ExtraLight"` |
+  | `300` | `"Light"` |
+  | `400` atau `"normal"` | `"Regular"` |
+  | `500` | `"Medium"` |
+  | `600` | `"SemiBold"` |
+  | `700` atau `"bold"` | `"Bold"` |
+  | `800` | `"ExtraBold"` |
+  | `900` | `"Black"` |
+
+  3. Nilai non-standar (misal 450) → bulatkan ke kelipatan 100 terdekat.
+  4. Buat juga fungsi `mapTextAlign(cssTextAlign)`:
+     - `"left"` → `"LEFT"`, `"center"` → `"CENTER"`, `"right"` → `"RIGHT"`, `"justify"` → `"JUSTIFIED"`.
+     - Default: `"LEFT"`.
+  5. Buat juga fungsi `mapTextDecoration(cssDecoration)`:
+     - `"underline"` → `"UNDERLINE"`, `"line-through"` → `"STRIKETHROUGH"`.
+     - Default: `"NONE"`.
+- **Acceptance Criteria:**
+  - `mapFontWeight(700)` → `"Bold"`.
+  - `mapFontWeight("bold")` → `"Bold"`.
+  - `mapFontWeight(450)` → `"Medium"` (dibulatkan ke 500).
+  - `mapTextAlign("center")` → `"CENTER"`.
+  - Input `null`/`undefined` → nilai default (tidak crash).
 
 ---
 
-### 0.5 Browser Extension — Manifest V3
+### `T1.6` — Smart Layer Namer
 
-- [ ] **Buat `manifest.json` untuk Chrome Extension (Manifest V3)**
-  - *Sub-tasks:*
-    - Buat file `browser-extension/public/manifest.json`:
-      ```json
-      {
-        "manifest_version": 3,
-        "name": "CodeToFrame",
-        "version": "1.0.0",
-        "description": "Extract web page elements into editable Figma designs.",
-        "permissions": ["activeTab", "scripting"],
-        "action": {
-          "default_popup": "popup.html",
-          "default_icon": {
-            "16": "icons/icon-16.png",
-            "48": "icons/icon-48.png",
-            "128": "icons/icon-128.png"
-          }
-        },
-        "icons": {
-          "16": "icons/icon-16.png",
-          "48": "icons/icon-48.png",
-          "128": "icons/icon-128.png"
-        },
-        "background": {
-          "service_worker": "service-worker.js",
-          "type": "module"
-        }
-      }
-      ```
-    - **Permission yang dipakai:**
-      - `activeTab` → Mengizinkan ekstensi mengakses tab yang sedang aktif saat pengguna klik ikon ekstensi.
-      - `scripting` → Mengizinkan ekstensi meng-inject content script ke halaman web secara programatis.
-    - **JANGAN** pakai permission yang tidak perlu (misalnya `tabs`, `<all_urls>`, `storage`) untuk menjaga prinsip *least privilege*.
-  - *Definition of Done (DoD):*
-    - File `manifest.json` valid (bisa di-parse JSON).
-    - `manifest_version` bernilai `3` (bukan `2`).
-    - Tidak ada permission berlebihan.
-  - *Edge Cases to Handle:*
-    - Jika content script perlu dijalankan **otomatis** di setiap halaman (tanpa klik pengguna), tambahkan field `"content_scripts"` di manifest. Untuk MVP, kita gunakan injection programatis via `chrome.scripting.executeScript` — lebih aman dan lebih terkontrol.
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/utils/layer-namer.js`
+- **Instruksi:**
+  1. Buat fungsi `generateLayerName(tagName, classList, id)` yang mengembalikan string nama layer.
+  2. Aturan prioritas:
+     - Ada id → `tag#id` (contoh: `div#sidebar`)
+     - Ada class → `tag.class-pertama` (contoh: `div.card`)
+     - Ada keduanya → `tag.class-pertama#id` (contoh: `div.card#main`)
+     - Tidak ada keduanya → `tag` saja (contoh: `div`)
+  3. **Sanitasi nama:**
+     - Ubah ke lowercase.
+     - Truncate total nama ke maksimal 60 karakter.
+     - Jika class > 3, ambil 2 class pertama saja.
+  4. Buat juga fungsi `deduplicateNames(nameList)` yang menambahkan index jika ada duplikat:
+     - Input: `["div.card", "div.card", "p"]` → Output: `["div.card (1)", "div.card (2)", "p"]`.
+- **Acceptance Criteria:**
+  - `generateLayerName("DIV", ["card", "shadow-lg"], "main-card")` → `"div.card#main-card"`.
+  - `generateLayerName("P", [], "")` → `"p"`.
+  - Nama > 60 karakter → di-truncate.
+  - `deduplicateNames` menangani array dengan duplikat.
 
 ---
 
-### 0.6 Placeholder Icons
+## Fase 2: Algoritma Traversal DOM
 
-- [ ] **Buat placeholder icons untuk ekstensi**
-  - *Sub-tasks:*
-    - Buat folder `browser-extension/public/icons/`.
-    - Buat 3 file placeholder icon berformat PNG:
-      - `icon-16.png` (16×16 px)
-      - `icon-48.png` (48×48 px)
-      - `icon-128.png` (128×128 px)
-    - Untuk MVP, gunakan gambar sederhana (kotak berwarna dengan huruf "C" atau logo placeholder). Bisa dibuat pakai tool online seperti [favicon.io](https://favicon.io/) atau generator placeholder.
-  - *Definition of Done (DoD):*
-    - Ketiga file icon ada di `browser-extension/public/icons/`.
-    - Ukurannya sesuai (16px, 48px, 128px).
-    - Chrome tidak menampilkan error "Missing icon" saat ekstensi di-load.
-  - *Edge Cases to Handle:*
-    - Chrome kadang tidak menampilkan icon jika file corrupt atau bukan PNG yang valid. Pastikan file benar-benar berformat PNG (bukan JPEG yang di-rename).
+> **Tujuan:** Membangun fungsi rekursif yang menelusuri DOM tree dari `document.body` ke bawah dan menghasilkan tree bersarang. Ini adalah jantung dari sistem v2.0.
 
 ---
 
-### 0.7 Linter & Formatter (Opsional tapi Disarankan)
+### `T2.1` — Visibility Checker
 
-- [ ] **Setup ESLint untuk kedua proyek**
-  - *Sub-tasks:*
-    - Install ESLint di masing-masing sub-proyek:
-      ```bash
-      cd browser-extension && npm install --save-dev eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin
-      cd figma-plugin && npm install --save-dev eslint @typescript-eslint/parser @typescript-eslint/eslint-plugin
-      ```
-    - Buat file konfigurasi `eslint.config.js` (flat config ESLint v9+) atau `.eslintrc.json` di masing-masing folder.
-    - Atur rule minimal:
-      - `no-unused-vars: "error"`
-      - `@typescript-eslint/no-explicit-any: "error"` (sesuai aturan di AGENTS.md: dilarang pakai `any`)
-      - `no-console: "off"` (kita butuh console.log dengan prefix `[CodeToFrame]`)
-    - Tambahkan script `"lint": "eslint src/"` ke `package.json` masing-masing proyek.
-  - *Definition of Done (DoD):*
-    - `npm run lint` berjalan di kedua proyek tanpa error konfigurasi.
-  - *Edge Cases to Handle:*
-    - ESLint v9 menggunakan flat config (`eslint.config.js`), sedangkan versi sebelumnya pakai `.eslintrc.*`. Pastikan versi yang diinstall konsisten dengan format konfigurasi.
-
----
-
-- [ ] **Setup Prettier untuk kedua proyek**
-  - *Sub-tasks:*
-    - Install Prettier:
-      ```bash
-      cd browser-extension && npm install --save-dev prettier
-      cd figma-plugin && npm install --save-dev prettier
-      ```
-    - Buat file `.prettierrc` di **root repositori** (satu untuk kedua proyek):
-      ```json
-      {
-        "semi": true,
-        "singleQuote": true,
-        "trailingComma": "all",
-        "printWidth": 100,
-        "tabWidth": 2
-      }
-      ```
-    - Tambahkan script `"format": "prettier --write src/"` ke `package.json` masing-masing proyek.
-  - *Definition of Done (DoD):*
-    - `npm run format` memformat semua file `.ts`, `.html`, `.css` di folder `src/`.
-    - Tidak ada konflik antara aturan ESLint dan Prettier (jika ada, install `eslint-config-prettier`).
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/content/dom-traverser.js` (bagian atas file)
+- **Instruksi:**
+  1. Buat fungsi `isElementVisible(element, computedStyle)` yang mengembalikan `boolean`.
+  2. Return `false` jika salah satu kondisi ini terpenuhi:
+     - `computedStyle.display === 'none'`
+     - `computedStyle.visibility === 'hidden'` (tapi **hanya** untuk elemen ini, children bisa visible)
+     - `parseFloat(computedStyle.opacity) === 0`
+     - `element.getBoundingClientRect().width === 0 DAN height === 0`
+     - Tag termasuk dalam `SKIP_TAGS` (`SCRIPT`, `STYLE`, `META`, `LINK`, `NOSCRIPT`, `BR`, `HR`, `HEAD`)
+  3. Return `true` untuk semua kasus lain (termasuk elemen di luar viewport — tetap valid karena bisa di-scroll).
+  4. Buat juga `isContainerWithHiddenChildren(element, computedStyle)` yang mendeteksi kasus khusus `visibility: hidden` pada parent. Return `true` jika children masih harus diproses.
+- **Acceptance Criteria:**
+  - `display: none` → `false`.
+  - `visibility: hidden` → `false` untuk elemen sendiri, tapi children tetap diproses.
+  - `opacity: 0` → `false`.
+  - `<script>` → `false`.
+  - `<div>` biasa → `true`.
+  - `<div>` di luar viewport tapi berukuran > 0 → `true`.
 
 ---
 
-### ✅ Checkpoint Phase 0
+### `T2.2` — Recursive DOM Traverser
 
-Sebelum lanjut ke Phase 1, pastikan semua kondisi berikut terpenuhi:
-
-| # | Cek | Status |
-|:---:|---|:---:|
-| 1 | Folder `browser-extension/`, `figma-plugin/`, `shared/` ada di root | [ ] |
-| 2 | `.gitignore` sudah mengecualikan `node_modules/` dan `dist/` | [ ] |
-| 3 | `npm install` berhasil di kedua sub-proyek | [ ] |
-| 4 | `npx tsc --version` berhasil di kedua sub-proyek | [ ] |
-| 5 | `browser-extension/public/manifest.json` valid (Manifest V3) | [ ] |
-| 6 | `figma-plugin/manifest.json` valid | [ ] |
-| 7 | `tsconfig.json` ada dan `strict: true` di kedua sub-proyek | [ ] |
-| 8 | `vite.config.ts` ada di `browser-extension/` | [ ] |
-| 9 | Placeholder icons ada di `browser-extension/public/icons/` | [ ] |
-| 10 | Commit semua setup ke Git | [ ] |
-
----
-
-## Phase 1 — Shared Data Contracts (JSON Schema)
-
-> **Tujuan:** Mendefinisikan "kontrak data" antara Browser Extension dan Figma Plugin. Ini adalah fondasi yang menentukan bentuk JSON yang akan diproduksi dan dikonsumsi.  
-> **Estimasi:** 0.5 hari kerja  
-> **Prasyarat:** Phase 0 selesai.
-
----
-
-### 1.1 Definisi Interface Utama
-
-- [ ] **Buat file `schema.ts` di kedua proyek**
-  - *Sub-tasks:*
-    - Buat file `browser-extension/src/types/schema.ts`.
-    - Buat file `figma-plugin/src/types/schema.ts`.
-    - Kedua file **HARUS identik** — copy-paste satu ke yang lain.
-    - Definisikan interface berikut:
-
-      **`RGBColor`** — Representasi warna:
-      ```typescript
-      /** Representasi warna RGB dengan nilai 0–255 per channel. */
-      export interface RGBColor {
-        /** Nilai merah (Red), rentang 0–255. */
-        r: number;
-        /** Nilai hijau (Green), rentang 0–255. */
-        g: number;
-        /** Nilai biru (Blue), rentang 0–255. */
-        b: number;
-      }
-      ```
-
-      **`RectangleElement`** — Elemen kotak:
-      ```typescript
-      /** Elemen visual berupa kotak/area (div, section, button, dsb.). */
-      export interface RectangleElement {
-        type: "RECTANGLE";
-        /** Posisi horizontal dari kiri viewport (pixel). */
-        x: number;
-        /** Posisi vertikal dari atas viewport (pixel). */
-        y: number;
-        /** Lebar elemen (pixel). */
-        width: number;
-        /** Tinggi elemen (pixel). */
-        height: number;
-        /** Warna latar belakang elemen. */
-        backgroundColor: RGBColor;
-      }
-      ```
-
-      **`TextElement`** — Elemen teks:
-      ```typescript
-      /** Elemen berupa teks (p, h1, span, dsb.). */
-      export interface TextElement {
-        type: "TEXT";
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-        /** Isi teks yang ditampilkan. */
-        textContent: string;
-        /** Ukuran huruf dalam pixel. */
-        fontSize: number;
-        /** Warna teks. */
-        textColor: RGBColor;
-      }
-      ```
-
-      **`FrameElement`** — Union type:
-      ```typescript
-      /** Gabungan semua tipe elemen yang didukung. */
-      export type FrameElement = RectangleElement | TextElement;
-      ```
-
-      **`CodeToFrameData`** — Struktur data utama:
-      ```typescript
-      /** Struktur data utama yang menjadi kontrak antara Extension dan Plugin. */
-      export interface CodeToFrameData {
-        /** URL halaman web sumber. */
-        sourceUrl: string;
-        /** Lebar viewport browser saat ekstraksi (pixel). */
-        viewportWidth: number;
-        /** Tinggi viewport browser saat ekstraksi (pixel). */
-        viewportHeight: number;
-        /** Daftar elemen yang berhasil diekstrak. */
-        elements: FrameElement[];
-      }
-      ```
-
-  - *Definition of Done (DoD):*
-    - File `schema.ts` ada di `browser-extension/src/types/` dan `figma-plugin/src/types/`.
-    - Kedua file isinya identik (100% sama).
-    - `npx tsc --noEmit` tidak menampilkan error di kedua proyek.
-    - Semua interface dan field memiliki JSDoc comment.
-  - *Edge Cases to Handle:*
-    - Pastikan `type` pada `RectangleElement` dan `TextElement` adalah **string literal** (`"RECTANGLE"`, `"TEXT"`), bukan `string` biasa. Ini penting agar TypeScript bisa melakukan *discriminated union* saat melakukan `switch/case` berdasarkan `type`.
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/content/dom-traverser.js`
+- **Instruksi:**
+  1. Buat fungsi utama `traverseDOM(rootElement, parentRect, currentDepth, nodeCounter)`.
+  2. Algoritma:
+     ```
+     function traverseDOM(element, parentRect, depth, counter):
+       IF counter.count >= MAX_NODES → return null
+       IF depth > MAX_DEPTH → return null
+       
+       computedStyle = getComputedStyle(element)
+       IF NOT isElementVisible(element, computedStyle) → return null
+       
+       rect = element.getBoundingClientRect()
+       nodeType = classifyElement(element.tagName)
+       
+       node = {
+         tagName: element.tagName,
+         element: element,    // Referensi DOM (untuk style extraction nanti)
+         rect: rect,
+         relativeX: rect.left - parentRect.left,
+         relativeY: rect.top - parentRect.top,
+         width: rect.width,
+         height: rect.height,
+         nodeType: nodeType,  // 'FRAME', 'TEXT', 'IMAGE', 'VECTOR'
+         children: []
+       }
+       
+       counter.count++
+       
+       FOR EACH childElement IN element.children:
+         childNode = traverseDOM(childElement, rect, depth + 1, counter)
+         IF childNode !== null:
+           node.children.push(childNode)
+       
+       return node
+     ```
+  3. Buat fungsi `classifyElement(tagName)`:
+     - Container tags → `'FRAME'`: `DIV, SECTION, HEADER, FOOTER, NAV, MAIN, ARTICLE, ASIDE, FORM, UL, OL, LI, TABLE, TR, TD, TH, THEAD, TBODY, TFOOT, FIGURE, FIGCAPTION, DETAILS, SUMMARY, DIALOG, FIELDSET, LABEL, BUTTON`
+     - Text tags → `'TEXT'`: `P, H1, H2, H3, H4, H5, H6, SPAN, A, STRONG, EM, B, I, U, S, SMALL, BLOCKQUOTE, CODE, PRE, Q, CITE, ABBR, TIME, MARK`
+     - Image tags → `'IMAGE'`: `IMG, PICTURE`
+     - Vector tags → `'VECTOR'`: `SVG`
+     - Unknown → `'FRAME'` (generic container)
+  4. Counter harus berupa objek `{ count: 0 }` yang di-pass by reference agar terakumulasi di seluruh rekursi.
+  5. Export: `export { traverseDOM }`.
+- **Acceptance Criteria:**
+  - DOM tree 3-level menghasilkan output tree 3-level (nested children).
+  - `MAX_DEPTH` = 15 dihormati (node di level 16 di-skip).
+  - `MAX_NODES` = 2000 dihormati (traversal berhenti setelah 2000).
+  - Elemen `display: none` dan children-nya tidak muncul di output.
+  - `relativeX` dan `relativeY` dihitung relatif terhadap parent, bukan viewport.
+  - Urutan children di output mengikuti urutan DOM (z-order preserved).
 
 ---
 
-### 1.2 Type Guard / Validation Functions
+### `T2.3` — Entry Point Content Script
 
-- [ ] **Buat fungsi validasi untuk memastikan JSON yang di-paste pengguna sesuai kontrak**
-  - *Sub-tasks:*
-    - Buat fungsi `isValidRGBColor(value: unknown): value is RGBColor` di `schema.ts` (atau file terpisah `validators.ts`):
-      ```typescript
-      export function isValidRGBColor(value: unknown): value is RGBColor {
-        if (typeof value !== 'object' || value === null) return false;
-        const obj = value as Record<string, unknown>;
-        return (
-          typeof obj.r === 'number' && obj.r >= 0 && obj.r <= 255 &&
-          typeof obj.g === 'number' && obj.g >= 0 && obj.g <= 255 &&
-          typeof obj.b === 'number' && obj.b >= 0 && obj.b <= 255
-        );
-      }
-      ```
-    - Buat fungsi `isValidFrameElement(value: unknown): value is FrameElement`:
-      - Cek `type` apakah `"RECTANGLE"` atau `"TEXT"`.
-      - Cek semua field wajib ada dan bertipe benar.
-      - Cek semua field numerik bernilai positif (x, y, width, height >= 0).
-    - Buat fungsi `isValidCodeToFrameData(value: unknown): value is CodeToFrameData`:
-      - Cek `sourceUrl` adalah string.
-      - Cek `viewportWidth` dan `viewportHeight` adalah number positif.
-      - Cek `elements` adalah array, dan setiap elemennya valid (gunakan `isValidFrameElement`).
-    - Buat fungsi ini **hanya** di `figma-plugin/src/types/` (karena validasi dilakukan saat menerima JSON di plugin, bukan saat mengekstrak di extension).
-  - *Definition of Done (DoD):*
-    - Fungsi validasi bisa mendeteksi JSON yang tidak sesuai kontrak dan mengembalikan `false`.
-    - Fungsi validasi bisa meloloskan JSON yang sesuai kontrak dan mengembalikan `true` dengan type narrowing yang benar.
-    - `npx tsc --noEmit` tidak menampilkan error.
-  - *Edge Cases to Handle:*
-    - JSON yang `elements`-nya array kosong (`[]`) → **valid** (halaman tidak punya elemen yang bisa diekstrak).
-    - JSON yang `elements`-nya bukan array (misalnya `null`, `"string"`, `123`) → **invalid**.
-    - Elemen dengan `width: 0` atau `height: 0` → **valid** secara struktur, tapi bisa di-skip saat render.
-    - Field `textContent` berisi string kosong (`""`) → **valid** (mungkin elemen teks yang content-nya whitespace).
-    - Nilai `fontSize` = 0 atau negatif → **invalid**, tangani dengan pesan error yang jelas.
-
----
-
-### ✅ Checkpoint Phase 1
-
-| # | Cek | Status |
-|:---:|---|:---:|
-| 1 | `schema.ts` ada di kedua proyek dan isinya identik | [ ] |
-| 2 | Semua interface punya JSDoc comment | [ ] |
-| 3 | Type guards/validators ada di figma-plugin | [ ] |
-| 4 | `npx tsc --noEmit` lolos di kedua proyek | [ ] |
-| 5 | Commit ke Git dengan pesan: `feat: add shared data contracts (JSON schema)` | [ ] |
-
----
-
-## Phase 2 — Chrome Extension Core (DOM Extraction Engine)
-
-> **Tujuan:** Membangun mesin utama yang bisa membaca elemen-elemen DOM dari halaman web dan mengubahnya menjadi format JSON sesuai kontrak data.  
-> **Estimasi:** 2–3 hari kerja  
-> **Prasyarat:** Phase 1 selesai (interface di `schema.ts` sudah final).
-
----
-
-### 2.1 Buat Kerangka File Content Script
-
-- [ ] **Buat file `extractor.ts` di `browser-extension/src/content/`**
-  - *Sub-tasks:*
-    - Buat folder `browser-extension/src/content/` jika belum ada.
-    - Buat file `browser-extension/src/content/extractor.ts`.
-    - Import interface dari `../types/schema.ts`.
-    - Buat fungsi utama `extractElements(): CodeToFrameData` sebagai kerangka kosong (return data dummy dulu).
-    - Tambahkan log `console.log("[CodeToFrame] Content script loaded.");` di awal file untuk memastikan script ter-inject.
-  - *Definition of Done (DoD):*
-    - File ada dan bisa di-compile tanpa error.
-    - Fungsi `extractElements()` mengembalikan objek `CodeToFrameData` yang valid (walau masih dummy).
-  - *Edge Cases to Handle:*
-    - Content script di-load **setiap kali** halaman dibuka atau tab di-refresh. Pastikan tidak ada efek samping dari load berulang (no global state mutation).
-
----
-
-### 2.2 Logika Penelusuran DOM (DOM Traversal)
-
-- [ ] **Implementasi traversal untuk mengumpulkan semua elemen DOM yang terlihat**
-  - *Sub-tasks:*
-    - Gunakan `document.body.querySelectorAll('*')` untuk mendapatkan semua elemen di halaman.
-    - Untuk setiap elemen, panggil `window.getComputedStyle(element)` untuk membaca properti CSS-nya.
-    - **Filter elemen yang TIDAK terlihat:**
-      - Skip jika `computedStyle.display === 'none'`.
-      - Skip jika `computedStyle.visibility === 'hidden'`.
-      - Skip jika `computedStyle.opacity === '0'`.
-      - Skip jika `element.offsetWidth === 0 && element.offsetHeight === 0` (elemen tanpa dimensi).
-    - **Filter elemen di luar viewport:**
-      - Gunakan `element.getBoundingClientRect()`.
-      - Skip jika `rect.width <= 0 || rect.height <= 0`.
-      - Skip jika elemen sepenuhnya di luar viewport (opsional — bisa dimasukkan di masa depan).
-    - Kumpulkan elemen-elemen yang lolos filter ke dalam array.
-  - *Definition of Done (DoD):*
-    - Fungsi traversal mengembalikan array elemen DOM yang terlihat.
-    - Elemen tersembunyi (`display: none`, dll.) tidak masuk ke array.
-    - Console log menampilkan jumlah elemen yang ditemukan: `[CodeToFrame] Found X visible elements.`
-  - *Edge Cases to Handle:*
-    - **`<html>` dan `<body>`:** Elemen ini punya dimensi tapi biasanya tidak perlu diekstrak sebagai "kotak visual". Pertimbangkan untuk skip tag-tag ini.
-    - **`<script>`, `<style>`, `<meta>`, `<link>`, `<head>`:** Skip semua elemen non-visual ini.
-    - **Elemen di dalam `<iframe>`:** JANGAN masuk ke iframe — ini di luar ruang lingkup MVP dan bisa menimbulkan error cross-origin.
-    - **Halaman dengan ribuan elemen:** Pertimbangkan batasan (misalnya max 500 elemen) untuk menghindari JSON yang terlalu besar. Tampilkan warning jika melebihi batas.
-
----
-
-### 2.3 Klasifikasi Elemen: Rectangle vs Text
-
-- [ ] **Implementasi logika untuk mengklasifikasikan setiap elemen DOM menjadi RECTANGLE atau TEXT**
-  - *Sub-tasks:*
-    - Buat fungsi `classifyElement(element: Element, computedStyle: CSSStyleDeclaration): "RECTANGLE" | "TEXT" | null`.
-    - **Logika klasifikasi TEXT:**
-      - Elemen dianggap TEXT jika memiliki **direct text content** (teks yang langsung ada di node tersebut, bukan di child node).
-      - Cara mengecek: iterasi `element.childNodes`, cari node bertipe `Node.TEXT_NODE` yang `textContent.trim()` tidak kosong.
-      - Jika elemen punya text content **DAN** juga punya child elements, ekstrak text-nya saja (bukan child elements — kita menghindari duplikasi).
-    - **Logika klasifikasi RECTANGLE:**
-      - Elemen dianggap RECTANGLE jika punya `backgroundColor` yang terlihat (bukan `transparent` dan bukan `rgba(0,0,0,0)`).
-      - ATAU jika elemen punya dimensi yang terlihat (width > 0, height > 0) dan `background-color` yang bukan transparent.
-    - **Elemen yang bisa jadi KEDUANYA:**
-      - Beberapa elemen (misalnya `<button>`) bisa punya background color DAN text content.
-      - Strategi MVP: buat **dua** entry — satu RECTANGLE (untuk background) dan satu TEXT (untuk teks di dalamnya).
-    - **Elemen yang TIDAK masuk keduanya → skip:**
-      - Elemen tanpa background visible DAN tanpa text content langsung → skip.
-      - Tag `<img>`, `<svg>`, `<canvas>`, `<video>`, `<audio>` → skip (out of scope).
-  - *Definition of Done (DoD):*
-    - Fungsi `classifyElement` mengembalikan `"RECTANGLE"`, `"TEXT"`, atau `null` sesuai logika di atas.
-    - Elemen yang punya background + text menghasilkan dua entry di output.
-    - Tag-tag out-of-scope di-skip tanpa error.
-  - *Edge Cases to Handle:*
-    - **Background `transparent`:** Secara default, banyak elemen punya `background-color: rgba(0, 0, 0, 0)` (transparent). Ini harus di-skip sebagai RECTANGLE.
-    - **Inherited background:** `getComputedStyle` mengembalikan warna background yang sudah di-resolve — jadi warna yang terlihat "putih" karena parent bisa saja `rgba(0,0,0,0)` di elemen itu sendiri. Hanya ambil jika warna eksplisit non-transparent.
-    - **Text node yang hanya whitespace:** `"   \n  "` → skip, jangan dianggap TEXT.
-    - **Pseudo-elements (`::before`, `::after`):** Out of scope MVP — abaikan.
-
----
-
-### 2.4 Pembacaan Bounding Box & Computed Styles
-
-- [ ] **Implementasi pembacaan posisi, dimensi, dan properti visual setiap elemen**
-  - *Sub-tasks:*
-    - Buat fungsi `extractRectangleData(element: Element): RectangleElement | null`:
-      ```typescript
-      function extractRectangleData(element: Element): RectangleElement | null {
-        const rect = element.getBoundingClientRect();
-        const style = window.getComputedStyle(element);
-        const bgColor = parseColor(style.backgroundColor);
-
-        // Skip jika background transparent
-        if (!bgColor) return null;
-
-        return {
-          type: "RECTANGLE",
-          x: Math.round(rect.x),
-          y: Math.round(rect.y),
-          width: Math.round(rect.width),
-          height: Math.round(rect.height),
-          backgroundColor: bgColor,
-        };
-      }
-      ```
-    - Buat fungsi `extractTextData(element: Element): TextElement | null`:
-      ```typescript
-      function extractTextData(element: Element): TextElement | null {
-        const directText = getDirectTextContent(element);
-        if (!directText || directText.trim() === '') return null;
-
-        const rect = element.getBoundingClientRect();
-        const style = window.getComputedStyle(element);
-        const textColor = parseColor(style.color);
-
-        return {
-          type: "TEXT",
-          x: Math.round(rect.x),
-          y: Math.round(rect.y),
-          width: Math.round(rect.width),
-          height: Math.round(rect.height),
-          textContent: directText.trim(),
-          fontSize: parseFloat(style.fontSize) || 16,
-          textColor: textColor || { r: 0, g: 0, b: 0 }, // default hitam
-        };
-      }
-      ```
-    - **Gunakan `Math.round()`** untuk semua nilai posisi dan dimensi — Figma bekerja dengan integer pixel, dan nilai desimal bisa menyebabkan rendering yang tidak rapi.
-  - *Definition of Done (DoD):*
-    - `extractRectangleData` mengembalikan `RectangleElement` yang valid atau `null`.
-    - `extractTextData` mengembalikan `TextElement` yang valid atau `null`.
-    - Semua nilai posisi dan dimensi sudah di-round ke integer.
-  - *Edge Cases to Handle:*
-    - **`getBoundingClientRect()` mengembalikan posisi relatif terhadap viewport**, bukan halaman. Jika halaman di-scroll, posisi Y akan bergeser. Untuk MVP, kita terima ini apa adanya (posisi = posisi yang terlihat saat ekstraksi). Jika butuh posisi absolut dari atas halaman, tambahkan `window.scrollY` ke `rect.y`.
-    - **Elemen fixed/sticky:** Posisi mereka tidak berubah saat scroll. `getBoundingClientRect()` sudah menangani ini secara otomatis.
-
----
-
-### 2.5 Parsing Warna CSS
-
-- [ ] **Implementasi fungsi parsing warna CSS ke format `RGBColor`**
-  - *Sub-tasks:*
-    - Buat fungsi `parseColor(cssColor: string): RGBColor | null`:
-      ```typescript
-      /**
-       * Parse CSS color string ke format RGBColor.
-       * getComputedStyle selalu mengembalikan format rgb() atau rgba().
-       * Mengembalikan null jika warna transparent.
-       */
-      function parseColor(cssColor: string): RGBColor | null {
-        // getComputedStyle mengembalikan "rgb(R, G, B)" atau "rgba(R, G, B, A)"
-        const rgbMatch = cssColor.match(
-          /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\s*\)/
-        );
-
-        if (!rgbMatch) return null;
-
-        const r = parseInt(rgbMatch[1], 10);
-        const g = parseInt(rgbMatch[2], 10);
-        const b = parseInt(rgbMatch[3], 10);
-        const a = rgbMatch[4] !== undefined ? parseFloat(rgbMatch[4]) : 1;
-
-        // Jika alpha = 0, warna sepenuhnya transparan → skip
-        if (a === 0) return null;
-
-        return { r, g, b };
-      }
-      ```
-    - **Catatan penting:** `window.getComputedStyle()` selalu mengembalikan warna dalam format `rgb()` atau `rgba()`, terlepas dari bagaimana warna itu ditulis di CSS (hex, hsl, named color, dll.). Jadi kita hanya perlu menangani dua format ini.
-  - *Definition of Done (DoD):*
-    - `parseColor("rgb(59, 130, 246)")` → `{ r: 59, g: 130, b: 246 }`.
-    - `parseColor("rgba(0, 0, 0, 0)")` → `null` (transparent).
-    - `parseColor("rgba(255, 0, 0, 0.5)")` → `{ r: 255, g: 0, b: 0 }` (alpha diabaikan di MVP, warna tetap diambil).
-    - `parseColor("transparent")` → `null`.
-  - *Edge Cases to Handle:*
-    - **`"transparent"` sebagai string literal:** Beberapa browser mengembalikan `"transparent"` alih-alih `"rgba(0, 0, 0, 0)"` — regex di atas tidak akan match, sehingga mengembalikan `null`. Ini sudah benar.
-    - **Spasi antar nilai:** Beberapa browser menambahkan atau menghilangkan spasi. Regex harus toleran terhadap variasi spasi (gunakan `\s*`).
-
----
-
-### 2.6 Fungsi Helper: Get Direct Text Content
-
-- [ ] **Implementasi fungsi untuk mengambil teks langsung dari elemen (bukan dari child elements)**
-  - *Sub-tasks:*
-    - Buat fungsi `getDirectTextContent(element: Element): string`:
-      ```typescript
-      /**
-       * Mengambil teks yang langsung dimiliki elemen, BUKAN teks dari child elements.
-       * Contoh: <div>Hello <span>World</span></div>
-       * getDirectTextContent(div) → "Hello " (tanpa "World" yang ada di span)
-       */
-      function getDirectTextContent(element: Element): string {
-        let text = '';
-        for (const node of element.childNodes) {
-          if (node.nodeType === Node.TEXT_NODE) {
-            text += node.textContent || '';
-          }
-        }
-        return text.trim();
-      }
-      ```
-    - **Kenapa bukan `element.textContent` biasa?** Karena `textContent` mengembalikan SEMUA teks termasuk teks di dalam child elements. Ini akan menyebabkan duplikasi — teks yang sama muncul di parent DAN di child.
-  - *Definition of Done (DoD):*
-    - Fungsi mengembalikan hanya teks langsung (direct text nodes).
-    - Teks dari child elements tidak termasuk.
-    - Whitespace di awal/akhir sudah di-trim.
-  - *Edge Cases to Handle:*
-    - **Elemen tanpa text node:** Mengembalikan `""` (string kosong).
-    - **Multiple text nodes:** Contoh `<p>Hello <em>World</em> Foo</p>` → `getDirectTextContent(p)` = `"Hello  Foo"`.
-    - **Elemen dengan entity HTML:** `&amp;` sudah di-decode oleh browser menjadi `&` di `textContent`.
-
----
-
-### 2.7 Fungsi Utama: Merangkai Semuanya
-
-- [ ] **Implementasi fungsi utama `extractElements()` yang menggabungkan semua logika**
-  - *Sub-tasks:*
-    - Di `extractor.ts`, implementasikan fungsi utama:
-      ```typescript
-      /**
-       * Fungsi utama: mengekstrak semua elemen yang terlihat dari halaman web
-       * dan mengubahnya menjadi format CodeToFrameData.
-       */
-      function extractElements(): CodeToFrameData {
-        console.log("[CodeToFrame] Starting extraction...");
-        const elements: FrameElement[] = [];
-        const allDomElements = document.body.querySelectorAll('*');
-
-        // Daftar tag yang harus di-skip
-        const SKIP_TAGS = new Set([
-          'SCRIPT', 'STYLE', 'META', 'LINK', 'HEAD', 'NOSCRIPT',
-          'IMG', 'SVG', 'CANVAS', 'VIDEO', 'AUDIO', 'IFRAME',
-          'BR', 'HR',
-        ]);
-
-        for (const el of allDomElements) {
-          // Skip tag yang tidak didukung
-          if (SKIP_TAGS.has(el.tagName)) continue;
-
-          // Skip elemen yang tidak terlihat
-          if (!isElementVisible(el)) continue;
-
-          // Coba ekstrak sebagai RECTANGLE
-          const rectData = extractRectangleData(el);
-          if (rectData) elements.push(rectData);
-
-          // Coba ekstrak sebagai TEXT
-          const textData = extractTextData(el);
-          if (textData) elements.push(textData);
-        }
-
-        console.log(`[CodeToFrame] Extraction complete: ${elements.length} elements found.`);
-
-        return {
-          sourceUrl: window.location.href,
-          viewportWidth: window.innerWidth,
-          viewportHeight: window.innerHeight,
-          elements,
-        };
-      }
-      ```
-    - Buat fungsi helper `isElementVisible(element: Element): boolean` yang mengecek `display`, `visibility`, `opacity`, dan dimensi.
-  - *Definition of Done (DoD):*
-    - `extractElements()` mengembalikan objek `CodeToFrameData` yang valid.
-    - Elemen tersembunyi dan tag out-of-scope di-skip.
-    - Console log menampilkan jumlah elemen yang berhasil diekstrak.
-    - `npx tsc --noEmit` tidak menampilkan error.
-  - *Edge Cases to Handle:*
-    - **Halaman kosong (blank page):** `elements` akan berisi array kosong `[]` — ini valid.
-    - **Halaman sangat besar (ribuan elemen):** Pertimbangkan menambahkan konstanta `MAX_ELEMENTS = 500` dan menghentikan loop jika sudah tercapai. Tampilkan warning di console.
-
----
-
-### 2.8 Message Listener untuk Komunikasi dengan Popup
-
-- [ ] **Tambahkan message listener di content script agar bisa menerima perintah dari popup**
-  - *Sub-tasks:*
-    - Di `extractor.ts`, tambahkan listener:
-      ```typescript
-      chrome.runtime.onMessage.addListener(
-        (message, _sender, sendResponse) => {
-          if (message.type === 'EXTRACT_DOM') {
-            console.log("[CodeToFrame] Received extraction request from popup.");
-            const data = extractElements();
-            sendResponse({ success: true, data });
-          }
-          // Return true jika sendResponse akan dipanggil secara asinkron
-          // Untuk MVP, extraction synchronous jadi tidak perlu return true
-        }
-      );
-      ```
-    - **Catatan:** `sendResponse` adalah callback untuk mengirim jawaban kembali ke popup. Ini adalah pola **request-response** di Chrome Extension messaging.
-  - *Definition of Done (DoD):*
-    - Content script merespon pesan bertipe `EXTRACT_DOM` dengan mengembalikan `CodeToFrameData`.
-    - Pesan selain `EXTRACT_DOM` diabaikan tanpa error.
-  - *Edge Cases to Handle:*
-    - Jika extraction gagal (misalnya halaman belum fully loaded), catch error dan kirim `{ success: false, error: "..." }`.
-    - Jika `sendResponse` tidak dipanggil, Chrome akan menampilkan warning di console — pastikan selalu ada response.
-
----
-
-### ✅ Checkpoint Phase 2
-
-| # | Cek | Status |
-|:---:|---|:---:|
-| 1 | `extractor.ts` ada dan bisa di-compile | [ ] |
-| 2 | Fungsi `extractElements()` mengembalikan `CodeToFrameData` yang valid | [ ] |
-| 3 | Elemen tidak terlihat (`display: none`, dll.) di-skip | [ ] |
-| 4 | Tag out-of-scope (`img`, `svg`, dll.) di-skip tanpa error | [ ] |
-| 5 | Warna CSS di-parse dengan benar (rgb/rgba) | [ ] |
-| 6 | Direct text content diambil tanpa duplikasi dari child | [ ] |
-| 7 | Message listener untuk `EXTRACT_DOM` berfungsi | [ ] |
-| 8 | `npx tsc --noEmit` lolos | [ ] |
-| 9 | Commit ke Git | [ ] |
-
----
-
-## Phase 3 — Chrome Extension UI & Data Export
-
-> **Tujuan:** Membangun antarmuka popup ekstensi yang memungkinkan pengguna memicu ekstraksi dan menyalin hasilnya ke clipboard.  
-> **Estimasi:** 1 hari kerja  
-> **Prasyarat:** Phase 2 selesai (content script sudah bisa mengekstrak data).
-
----
-
-### 3.1 Popup HTML
-
-- [ ] **Buat file `popup.html` di `browser-extension/src/popup/`**
-  - *Sub-tasks:*
-    - Buat folder `browser-extension/src/popup/` jika belum ada.
-    - Buat file `popup.html` dengan struktur berikut:
-      - Judul/header: "CodeToFrame".
-      - Tombol **"Extract DOM"** — memicu proses ekstraksi.
-      - Area status (elemen `<p>` atau `<div>`) — menampilkan pesan seperti "Ready", "Extracting...", "Done! X elements found.", "Error: ...".
-      - Tombol **"Copy JSON"** — menyalin hasil JSON ke clipboard. Tombol ini disabled secara default, aktif setelah ekstraksi berhasil.
-      - (Opsional) Area preview — `<textarea readonly>` untuk menampilkan JSON hasil ekstraksi.
-    - Sertakan link ke `popup.css` dan `popup.ts` (sebagai module script).
-    - Pastikan setiap elemen interaktif memiliki `id` yang unik dan deskriptif (untuk testing dan aksesibilitas).
-  - *Definition of Done (DoD):*
-    - File `popup.html` ada dan menampilkan UI yang fungsional.
-    - Ada tombol "Extract DOM" dan "Copy JSON".
-    - Ada area status yang bisa menampilkan pesan.
-  - *Edge Cases to Handle:*
-    - Lebar popup Chrome terbatas (~400px). Pastikan layout tidak overflow.
-
----
-
-### 3.2 Popup CSS
-
-- [ ] **Buat file `popup.css` untuk styling popup**
-  - *Sub-tasks:*
-    - Buat file `browser-extension/src/popup/popup.css`.
-    - Set lebar popup: `body { width: 360px; }` (standar untuk popup Chrome Extension).
-    - Beri padding yang cukup agar konten tidak menempel ke tepi.
-    - Style tombol "Extract DOM" agar menonjol (primary button style).
-    - Style tombol "Copy JSON" dengan warna berbeda (secondary button style).
-    - Style area status: font size lebih kecil, warna berbeda untuk success vs error.
-    - Style textarea preview (jika ada): font monospace, readonly, background abu-abu muda.
-    - Tambahkan state visual:
-      - Tombol disabled: opacity berkurang, cursor `not-allowed`.
-      - Tombol loading: teks berubah atau ada indikator spinner sederhana.
-  - *Definition of Done (DoD):*
-    - Popup terlihat rapi dan profesional di Chrome.
-    - Semua state visual (disabled, loading, success, error) tertangani.
-
----
-
-### 3.3 Popup Logic (TypeScript)
-
-- [ ] **Buat file `popup.ts` untuk logika popup**
-  - *Sub-tasks:*
-    - Buat file `browser-extension/src/popup/popup.ts`.
-    - **Logika tombol "Extract DOM":**
-      1. Saat diklik, ubah status menjadi "Extracting...".
-      2. Disable tombol "Extract DOM" selama proses berjalan.
-      3. Gunakan `chrome.scripting.executeScript()` untuk menjalankan content script di tab aktif:
-         ```typescript
-         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-         if (!tab?.id) {
-           showStatus('Error: No active tab found.', 'error');
-           return;
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/content/entry.js`
+- **Instruksi:**
+  1. Buat listener untuk pesan dari popup:
+     ```javascript
+     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+       if (message.type === 'EXTRACT_PAGE') {
+         try {
+           const result = runExtractionPipeline();
+           sendResponse({ success: true, data: result });
+         } catch (error) {
+           sendResponse({ success: false, error: error.message });
          }
+         return true; // Wajib untuk async sendResponse
+       }
+     });
+     ```
+  2. Fungsi `runExtractionPipeline()` memanggil modul-modul secara berurutan:
+     - `traverseDOM()` → `extractStylesForTree()` → `mapToFigmaTree()` → return payload.
+  3. **Untuk sekarang**, cukup implementasi traversal saja (modul lain belum ada). Fungsi style dan mapper bisa di-stub dengan return langsung.
+- **Acceptance Criteria:**
+  - Content script menerima pesan `{ type: 'EXTRACT_PAGE' }` dari popup.
+  - Mengembalikan response `{ success: true, data: ... }` atau `{ success: false, error: ... }`.
+  - Tidak crash jika halaman web kosong (`document.body` tanpa children).
 
-         // Inject content script dan langsung jalankan extraction
-         const results = await chrome.scripting.executeScript({
-           target: { tabId: tab.id },
-           files: ['content.js'],
+---
+
+## Fase 3: Ekstraksi Geometri & CSS
+
+> **Tujuan:** Membaca semua properti visual dari setiap elemen DOM dan mengubahnya menjadi format yang siap di-map ke Figma.
+
+---
+
+### `T3.1` — Background Extractor
+
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/content/style-extractor.js`
+- **Instruksi:**
+  1. Buat fungsi `extractBackground(computedStyle)` yang mengembalikan:
+     ```javascript
+     {
+       solidColor: RGBA | null,        // Dari backgroundColor
+       gradient: GradientData | null,   // Dari backgroundImage jika linear-gradient
+       imageUrl: string | null          // Dari backgroundImage jika url(...)
+     }
+     ```
+  2. Cek `computedStyle.backgroundColor`:
+     - Jika bukan `transparent` atau `rgba(0, 0, 0, 0)` → parse dengan `parseColor()`.
+  3. Cek `computedStyle.backgroundImage`:
+     - Jika mengandung `linear-gradient(` → parse dengan `parseLinearGradient()`.
+     - Jika mengandung `url(` → ekstrak URL string.
+     - Jika `"none"` → abaikan.
+- **Acceptance Criteria:**
+  - Elemen dengan `background-color: blue` → `solidColor` berisi RGBA biru.
+  - Elemen dengan `background: linear-gradient(...)` → `gradient` berisi data gradient.
+  - Elemen dengan `background-image: url(img.jpg)` → `imageUrl` berisi `"img.jpg"`.
+  - Elemen tanpa background → semua `null`.
+
+---
+
+### `T3.2` — Border & Border-Radius Extractor
+
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/content/style-extractor.js` (tambahkan ke file yang sama)
+- **Instruksi:**
+  1. Buat fungsi `extractBorder(computedStyle)` yang mengembalikan `BorderData`:
+     ```javascript
+     {
+       width: number,     // Ambil dari borderTopWidth (atau terbesar dari 4 sisi)
+       color: RGBA,
+       style: string      // 'solid', 'dashed', 'dotted', 'none'
+     }
+     ```
+  2. Buat fungsi `extractBorderRadius(computedStyle)` yang mengembalikan `CornerRadii`:
+     ```javascript
+     {
+       topLeft: parseFloat(computedStyle.borderTopLeftRadius) || 0,
+       topRight: parseFloat(computedStyle.borderTopRightRadius) || 0,
+       bottomRight: parseFloat(computedStyle.borderBottomRightRadius) || 0,
+       bottomLeft: parseFloat(computedStyle.borderBottomLeftRadius) || 0
+     }
+     ```
+  3. Handle kasus `border-radius: 50%` → konversi ke pixel: `Math.min(width, height) / 2`.
+  4. Jika border-style adalah `none` → return border width 0.
+- **Acceptance Criteria:**
+  - `border: 2px solid red` → `{ width: 2, color: {r:255,...}, style: 'solid' }`.
+  - `border-radius: 8px` → semua corner = 8.
+  - `border-radius: 8px 0 8px 0` → `{ topLeft: 8, topRight: 0, bottomRight: 8, bottomLeft: 0 }`.
+  - `border: none` → `{ width: 0, ... }`.
+
+---
+
+### `T3.3` — Shadow & Opacity Extractor
+
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/content/style-extractor.js` (tambahkan ke file yang sama)
+- **Instruksi:**
+  1. Buat fungsi `extractBoxShadow(computedStyle)`:
+     - Delegate ke `parseBoxShadow()` dari `shadow-parser.js`.
+     - Return array `ShadowEffect[]`.
+  2. Buat fungsi `extractOpacity(computedStyle)`:
+     - Return `parseFloat(computedStyle.opacity)` clamped ke 0-1.
+     - Default: 1 jika parsing gagal.
+  3. Buat fungsi `extractOverflow(computedStyle)`:
+     - Return `computedStyle.overflow` — salah satu dari `'visible'`, `'hidden'`, `'scroll'`, `'auto'`.
+     - Default: `'visible'`.
+- **Acceptance Criteria:**
+  - `box-shadow: 0 4px 6px rgba(0,0,0,0.1)` → array berisi 1 shadow dengan blur=6.
+  - `opacity: 0.5` → 0.5.
+  - `overflow: hidden` → `'hidden'`.
+  - Semua fungsi return nilai default yang aman jika input tidak valid.
+
+---
+
+### `T3.4` — Typography Extractor
+
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/content/style-extractor.js` (tambahkan ke file yang sama)
+- **Instruksi:**
+  1. Buat fungsi `extractTypography(element, computedStyle)` yang mengembalikan `TypographyData | null`.
+  2. Return `null` jika elemen bukan text node (tidak punya text content yang bermakna).
+  3. Jika elemen mengandung teks:
+     ```javascript
+     {
+       fontFamily: extractFirstFont(computedStyle.fontFamily),
+       fontSize: parseFloat(computedStyle.fontSize) || 16,
+       fontWeight: parseInt(computedStyle.fontWeight) || 400,
+       fontStyle: mapFontWeight(computedStyle.fontWeight),
+       lineHeight: parseLineHeight(computedStyle.lineHeight, fontSize),
+       letterSpacing: parseLetterSpacing(computedStyle.letterSpacing, fontSize),
+       textAlign: mapTextAlign(computedStyle.textAlign),
+       textDecoration: mapTextDecoration(computedStyle.textDecorationLine)
+     }
+     ```
+  4. `extractFirstFont(fontFamily)`: Ambil font pertama dari stack, hapus quotes.
+     - `"'Inter', sans-serif"` → `"Inter"`
+     - `"Arial, Helvetica"` → `"Arial"`
+  5. `parseLineHeight(raw, fontSize)`:
+     - `"24px"` → 24
+     - `"1.5"` (unitless) → `fontSize * 1.5`
+     - `"normal"` → `null` (Figma akan gunakan default)
+  6. `parseLetterSpacing(raw, fontSize)`:
+     - `"0.5px"` → 0.5
+     - `"0.1em"` → `0.1 * fontSize`
+     - `"normal"` → 0
+- **Acceptance Criteria:**
+  - Font family `"'Inter', sans-serif"` → `"Inter"`.
+  - Line-height `"1.5"` pada font-size 16 → 24.
+  - Letter-spacing `"0.1em"` pada font-size 20 → 2.
+  - Elemen tanpa teks → `null`.
+
+---
+
+### `T3.5` — Flexbox / Auto Layout Detector
+
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/content/style-extractor.js` (tambahkan ke file yang sama)
+- **Instruksi:**
+  1. Buat fungsi `extractLayout(computedStyle)` yang mengembalikan `LayoutData`.
+  2. Jika `computedStyle.display` **bukan** `'flex'` dan **bukan** `'inline-flex'`:
+     - Return `{ mode: 'NONE', direction: 'ROW', gap: 0, padding: {top:0,...}, justifyContent: 'FLEX_START', alignItems: 'STRETCH', wrap: false }`.
+  3. Jika display adalah `flex` atau `inline-flex`:
+     ```javascript
+     {
+       mode: 'FLEX',
+       direction: mapFlexDirection(computedStyle.flexDirection),
+       gap: parseFloat(computedStyle.gap) || 0,
+       padding: {
+         top: parseFloat(computedStyle.paddingTop) || 0,
+         right: parseFloat(computedStyle.paddingRight) || 0,
+         bottom: parseFloat(computedStyle.paddingBottom) || 0,
+         left: parseFloat(computedStyle.paddingLeft) || 0
+       },
+       justifyContent: mapJustifyContent(computedStyle.justifyContent),
+       alignItems: mapAlignItems(computedStyle.alignItems),
+       wrap: computedStyle.flexWrap === 'wrap' || computedStyle.flexWrap === 'wrap-reverse'
+     }
+     ```
+  4. `mapFlexDirection`: `'row'` → `'ROW'`, `'column'` → `'COLUMN'`, `'row-reverse'` → `'ROW'` (reverse ditangani di child ordering), `'column-reverse'` → `'COLUMN'`.
+  5. `mapJustifyContent`: `'flex-start'`→`'FLEX_START'`, `'center'`→`'CENTER'`, `'flex-end'`→`'FLEX_END'`, `'space-between'`→`'SPACE_BETWEEN'`, `'space-around'`→`'SPACE_AROUND'`.
+  6. `mapAlignItems`: `'stretch'`→`'STRETCH'`, `'flex-start'`/`'start'`→`'FLEX_START'`, `'center'`→`'CENTER'`, `'flex-end'`/`'end'`→`'FLEX_END'`, `'baseline'`→`'FLEX_START'` (fallback, Figma tidak punya baseline).
+- **Acceptance Criteria:**
+  - `display: block` → `{ mode: 'NONE', ... }`.
+  - `display: flex; flex-direction: column; gap: 16px` → `{ mode: 'FLEX', direction: 'COLUMN', gap: 16, ... }`.
+  - `justify-content: space-between` → `justifyContent: 'SPACE_BETWEEN'`.
+  - Padding per sisi diekstrak terpisah.
+
+---
+
+### `T3.6` — Master Style Extractor Function
+
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/content/style-extractor.js` (fungsi pengikat)
+- **Instruksi:**
+  1. Buat fungsi utama `extractAllStyles(element)` yang memanggil semua sub-extractor:
+     ```javascript
+     export function extractAllStyles(element) {
+       const style = window.getComputedStyle(element);
+       if (!style) return getDefaultStyles();
+
+       return {
+         ...extractBackground(style),
+         border: extractBorder(style),
+         borderRadius: extractBorderRadius(style),
+         boxShadow: extractBoxShadow(style),
+         opacity: extractOpacity(style),
+         overflow: extractOverflow(style),
+         typography: extractTypography(element, style),
+         layout: extractLayout(style),
+         textColor: parseColor(style.color)
+       };
+     }
+     ```
+  2. Buat juga fungsi `getDefaultStyles()` yang mengembalikan objek dengan semua nilai default/aman.
+  3. Semua error di dalam sub-extractor harus di-catch dan menghasilkan nilai default — **bukan** propagate ke atas.
+- **Acceptance Criteria:**
+  - `extractAllStyles(divElement)` mengembalikan objek lengkap dengan semua properti.
+  - Jika satu sub-extractor gagal, properti lain tetap terisi.
+  - Fungsi tidak pernah throw error ke caller.
+
+---
+
+## Fase 4: Penanganan Aset Visual
+
+> **Tujuan:** Mengonversi tag `<img>` dan `<svg>` menjadi format yang bisa dipetakan ke Figma (image fill dan vector node).
+
+---
+
+### `T4.1` — Image URL Extractor
+
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/content/asset-handler.js`
+- **Instruksi:**
+  1. Buat fungsi `extractImageUrl(imgElement)` yang mengembalikan URL gambar absolute atau `null`.
+  2. Logika prioritas:
+     - Cek `imgElement.currentSrc` dulu (untuk responsive `<picture>`).
+     - Fallback ke `imgElement.src`.
+     - Fallback ke `imgElement.getAttribute('src')`.
+  3. Jika URL relatif → konversi ke absolut menggunakan `new URL(src, window.location.href).href`.
+  4. Jika URL adalah `data:image/...` (base64) → return apa adanya.
+  5. Jika URL kosong atau undefined → return `null`.
+  6. Export: `export { extractImageUrl }`.
+- **Acceptance Criteria:**
+  - `<img src="/img/hero.jpg">` pada halaman `https://example.com` → `"https://example.com/img/hero.jpg"`.
+  - `<img src="data:image/png;base64,abc123...">` → `"data:image/png;base64,abc123..."`.
+  - `<img>` tanpa src → `null`.
+
+---
+
+### `T4.2` — SVG Content Extractor
+
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/content/asset-handler.js` (tambahkan ke file yang sama)
+- **Instruksi:**
+  1. Buat fungsi `extractSvgContent(svgElement)` yang mengembalikan string SVG mentah atau `null`.
+  2. Gunakan `svgElement.outerHTML` untuk mendapatkan konten SVG lengkap.
+  3. **Batas ukuran:** Jika `outerHTML.length > 50000` karakter (SVG sangat besar) → return `null` dan log warning.
+  4. Validasi: cek bahwa string dimulai dengan `<svg` (case-insensitive).
+  5. **TIDAK** perlu mem-resolve `<use xlink:href="...">` atau external references di v2.0.
+- **Acceptance Criteria:**
+  - `<svg width="24" height="24"><path d="M10 20..."/></svg>` → string SVG lengkap.
+  - SVG > 50KB → `null` + console warning.
+  - Elemen bukan SVG → `null`.
+
+---
+
+### `T4.3` — Background Image URL Extractor
+
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/content/asset-handler.js` (tambahkan ke file yang sama)
+- **Instruksi:**
+  1. Buat fungsi `extractBackgroundImageUrl(computedStyle)` yang mengembalikan URL string atau `null`.
+  2. Baca `computedStyle.backgroundImage`.
+  3. Jika mengandung `url("...")` atau `url('...')` atau `url(...)`:
+     - Ekstrak URL dari dalam tanda kurung.
+     - Hapus quotes jika ada.
+     - Konversi ke URL absolut.
+  4. Jika `"none"` atau bukan `url(...)` → return `null`.
+  5. Jika mengandung `linear-gradient` → return `null` (ditangani oleh gradient parser).
+- **Acceptance Criteria:**
+  - `background-image: url("hero.jpg")` → `"https://example.com/hero.jpg"`.
+  - `background-image: none` → `null`.
+  - `background-image: linear-gradient(...)` → `null`.
+
+---
+
+## Fase 5: Figma Payload & Clipboard API
+
+> **Tujuan:** Mengonversi tree DOM yang sudah diperkaya dengan style menjadi format Figma, lalu menulisnya ke clipboard OS.
+
+---
+
+### `T5.1` — Figma Node Mapper
+
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/content/figma-mapper.js`
+- **Instruksi:**
+  1. Buat fungsi `mapToFigmaTree(domTree)` yang mengonversi output dari `traverseDOM()` (yang sudah diperkaya oleh `extractAllStyles()`) menjadi tree `FigmaNode`.
+  2. Untuk setiap node di domTree:
+     ```javascript
+     const figmaNode = {
+       type: domNode.nodeType,        // 'FRAME', 'TEXT', 'IMAGE', 'VECTOR'
+       name: generateLayerName(domNode.tagName, domNode.classList, domNode.id),
+       x: domNode.relativeX,
+       y: domNode.relativeY,
+       width: Math.max(1, domNode.width),
+       height: Math.max(1, domNode.height),
+       styles: domNode.extractedStyles,
+       children: []
+     };
+     ```
+  3. **Khusus TEXT node:**
+     - Tambahkan `textContent: element.innerText.trim()`.
+     - Tambahkan `typography: extractedStyles.typography`.
+  4. **Khusus IMAGE node:**
+     - Tambahkan `imageUrl: extractImageUrl(element)`.
+  5. **Khusus VECTOR node:**
+     - Tambahkan `svgContent: extractSvgContent(element)`.
+  6. **Khusus FRAME dengan display:flex:**
+     - Tambahkan `layout: extractedStyles.layout`.
+  7. Proses children secara rekursif.
+- **Acceptance Criteria:**
+  - Output tree memiliki struktur `FigmaNode` yang valid.
+  - Setiap node memiliki `name` yang deskriptif (dari smart namer).
+  - `width` dan `height` minimal 1 (tidak pernah 0).
+  - TEXT node memiliki `textContent` dan `typography`.
+  - IMAGE node memiliki `imageUrl`.
+
+---
+
+### `T5.2` — Payload Assembler
+
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/content/figma-mapper.js` (tambahkan ke file yang sama)
+- **Instruksi:**
+  1. Buat fungsi `assemblePayload(figmaTree)` yang membungkus tree menjadi `ExtractionPayload`:
+     ```javascript
+     export function assemblePayload(figmaTree) {
+       return {
+         version: '2.0',
+         sourceUrl: window.location.href,
+         viewport: {
+           width: window.innerWidth,
+           height: window.innerHeight,
+           scrollX: window.scrollX,
+           scrollY: window.scrollY
+         },
+         rootNode: figmaTree
+       };
+     }
+     ```
+  2. Validasi: pastikan `figmaTree` bukan `null`.
+- **Acceptance Criteria:**
+  - Payload memiliki field `version`, `sourceUrl`, `viewport`, dan `rootNode`.
+  - `viewport` mencerminkan dimensi aktual browser saat ekstraksi.
+
+---
+
+### `T5.3` — HTML Clipboard Payload Builder
+
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/clipboard/clipboard-writer.js`
+- **Instruksi:**
+  1. Buat fungsi `buildHtmlPayload(figmaTree)` yang mengonversi tree ke HTML string dengan inline styles.
+  2. Tujuan: Figma bisa mem-parse HTML yang di-paste dan membuat Frame + Text nodes.
+  3. Setiap `FRAME` node → `<div style="...">children</div>`.
+  4. Setiap `TEXT` node → `<p style="...">textContent</p>`.
+  5. Setiap `IMAGE` node → `<img src="..." style="...">`.
+  6. Inline style harus mencakup: `width`, `height`, `background-color`, `border`, `border-radius`, `font-size`, `color`, `font-family`, `font-weight`, dll.
+  7. Bungkus seluruh output dalam `<meta charset="utf-8">` + `<div>...</div>`.
+- **Acceptance Criteria:**
+  - Output adalah HTML string yang valid.
+  - Nested tree → nested `<div>` yang valid.
+  - Inline styles merepresentasikan styling yang diekstrak.
+
+---
+
+### `T5.4` — Clipboard Writer
+
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/clipboard/clipboard-writer.js` (tambahkan ke file yang sama)
+- **Instruksi:**
+  1. Buat fungsi `writeToClipboard(payload)` yang menulis ke clipboard OS:
+     ```javascript
+     export async function writeToClipboard(payload) {
+       const jsonString = JSON.stringify(payload, null, 2);
+       const htmlString = buildHtmlPayload(payload.rootNode);
+       
+       try {
+         const clipboardItem = new ClipboardItem({
+           'text/html': new Blob([htmlString], { type: 'text/html' }),
+           'text/plain': new Blob([jsonString], { type: 'text/plain' }),
          });
-         ```
-         **Atau** kirim pesan ke content script yang sudah ter-inject:
-         ```typescript
-         const response = await chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT_DOM' });
-         ```
-      4. Terima response berisi `CodeToFrameData`.
-      5. Tampilkan JSON di textarea (jika ada) dengan `JSON.stringify(data, null, 2)`.
-      6. Ubah status menjadi "Done! X elements found.".
-      7. Enable tombol "Copy JSON".
-    - **Logika tombol "Copy JSON":**
-      1. Ambil string JSON dari variabel/textarea.
-      2. Salin ke clipboard:
-         ```typescript
-         await navigator.clipboard.writeText(jsonString);
-         ```
-      3. Ubah teks tombol sementara menjadi "Copied!" selama 2 detik, lalu kembali ke "Copy JSON".
-    - **Fungsi helper `showStatus(message: string, type: 'info' | 'success' | 'error')`:**
-      - Mengubah teks dan warna area status sesuai tipe pesan.
-  - *Definition of Done (DoD):*
-    - Klik "Extract DOM" → content script berjalan → JSON ditampilkan di popup.
-    - Klik "Copy JSON" → JSON tersalin ke clipboard.
-    - Status pesan berubah sesuai tahapan proses.
-    - Error ditangani dan ditampilkan ke pengguna.
-  - *Edge Cases to Handle:*
-    - **Tab bukan halaman web** (misalnya `chrome://extensions`, `chrome://newtab`): Chrome melarang inject script ke halaman internal. Tampilkan error: "Cannot extract from Chrome internal pages."
-    - **Halaman `file://`:** Secara default, ekstensi tidak punya akses ke URL `file://`. Tampilkan pesan yang jelas.
-    - **Permission denied:** Jika `chrome.scripting.executeScript` gagal karena permission, tangkap error dan tampilkan pesan.
-    - **Popup ditutup sebelum response diterima:** Ini bisa terjadi jika pengguna klik di luar popup. Response akan hilang — ini adalah limitasi Chrome Extension popup. Tidak perlu ditangani di MVP.
+         await navigator.clipboard.write([clipboardItem]);
+         return { success: true, method: 'native' };
+       } catch (error) {
+         console.warn('[CodeToFrame] Native clipboard gagal, fallback ke writeText:', error);
+         try {
+           await navigator.clipboard.writeText(jsonString);
+           return { success: true, method: 'fallback-text' };
+         } catch (fallbackError) {
+           console.error('[CodeToFrame] Semua metode clipboard gagal:', fallbackError);
+           return { success: false, error: fallbackError.message };
+         }
+       }
+     }
+     ```
+  2. **Dual MIME:** Tulis `text/html` (untuk Figma native paste) DAN `text/plain` (untuk fallback/debugging).
+  3. **Fallback bertingkat:** Native `write()` → `writeText()` → return error.
+  4. Return objek status yang menunjukkan metode mana yang berhasil.
+- **Acceptance Criteria:**
+  - Clipboard berisi data setelah fungsi dipanggil.
+  - Jika native `write()` gagal → fallback ke `writeText()` tanpa crash.
+  - Return object menunjukkan `success: true/false` dan `method` yang digunakan.
 
 ---
 
-### 3.4 Service Worker (Background Script)
+## Fase 6: Smart Naming, Popup Update, & Final Testing
 
-- [ ] **Buat file `service-worker.ts` di `browser-extension/src/background/`**
-  - *Sub-tasks:*
-    - Buat folder `browser-extension/src/background/` jika belum ada.
-    - Buat file `service-worker.ts` dengan konten minimal:
-      ```typescript
-      // Service Worker untuk CodeToFrame Chrome Extension
-      // Di MVP, service worker digunakan minimal — hanya sebagai placeholder
-      // agar manifest.json tidak error.
-      console.log("[CodeToFrame] Service worker registered.");
-
-      // Listener untuk instalasi ekstensi
-      chrome.runtime.onInstalled.addListener((details) => {
-        console.log("[CodeToFrame] Extension installed:", details.reason);
-      });
-      ```
-    - **Catatan:** Di MVP, sebagian besar logika ada di popup.ts dan extractor.ts. Service worker mungkin tidak banyak dipakai — tapi file ini harus ada karena sudah didaftarkan di `manifest.json`.
-  - *Definition of Done (DoD):*
-    - File ada dan bisa di-compile.
-    - Chrome tidak menampilkan error "Service Worker registration failed".
-  - *Edge Cases to Handle:*
-    - Service Worker di Manifest V3 bisa "mati" kapan saja (lifecycle pendek). **JANGAN** simpan data di variabel global — data akan hilang saat Service Worker di-restart.
+> **Tujuan:** Integrasi akhir — memastikan seluruh pipeline bekerja dari popup UI sampai clipboard, dengan penamaan layer yang deskriptif.
 
 ---
 
-### 3.5 Build & Load Extension di Chrome
+### `T6.1` — Update Popup UI
 
-- [ ] **Verifikasi build dan load ekstensi ke Chrome**
-  - *Sub-tasks:*
-    - Jalankan `npm run build` di `browser-extension/`.
-    - Periksa folder `dist/` — pastikan berisi:
-      - `manifest.json` (dari `public/`)
-      - `icons/` (dari `public/`)
-      - `popup.html` dan `popup.js`
-      - `content.js` (dari `extractor.ts`)
-      - `service-worker.js`
-    - Buka Chrome → `chrome://extensions/` → Enable Developer Mode.
-    - Klik "Load unpacked" → pilih folder `browser-extension/dist/`.
-    - Pastikan ekstensi muncul di toolbar Chrome tanpa error.
-    - Klik ikon ekstensi → popup muncul.
-    - Buka halaman web sederhana → klik "Extract DOM" → JSON muncul di popup.
-    - Klik "Copy JSON" → paste di text editor → JSON valid.
-  - *Definition of Done (DoD):*
-    - Ekstensi bisa di-load di Chrome tanpa error.
-    - Alur Extract → Copy berfungsi end-to-end.
-  - *Edge Cases to Handle:*
-    - Jika `manifest.json` di `dist/` tidak ter-copy, periksa konfigurasi `publicDir` di `vite.config.ts`.
-    - Jika content script tidak berjalan, periksa apakah path di manifest sesuai dengan nama file output.
-
----
-
-### ✅ Checkpoint Phase 3
-
-| # | Cek | Status |
-|:---:|---|:---:|
-| 1 | `popup.html`, `popup.ts`, `popup.css` ada dan fungsional | [ ] |
-| 2 | Tombol "Extract DOM" memicu content script | [ ] |
-| 3 | JSON hasil ekstraksi ditampilkan di popup | [ ] |
-| 4 | Tombol "Copy JSON" menyalin ke clipboard | [ ] |
-| 5 | Status pesan (info/success/error) berfungsi | [ ] |
-| 6 | `service-worker.ts` ada dan ter-register | [ ] |
-| 7 | Build berhasil dan ekstensi bisa di-load di Chrome | [ ] |
-| 8 | Alur extract-copy berfungsi end-to-end di Chrome | [ ] |
-| 9 | Commit ke Git | [ ] |
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/popup/popup.html` + `popup.js` + `popup.css`
+- **Instruksi:**
+  1. **popup.html:** Tombol utama "Extract & Copy to Clipboard" + area status.
+  2. **popup.js:**
+     ```javascript
+     document.getElementById('extract-btn').addEventListener('click', async () => {
+       const statusEl = document.getElementById('status');
+       statusEl.textContent = 'Mengekstrak...';
+       
+       try {
+         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+         const response = await chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT_PAGE' });
+         
+         if (response.success) {
+           statusEl.textContent = `✅ Berhasil! ${response.nodeCount} elemen diekstrak. Paste di Figma (Ctrl+V).`;
+         } else {
+           statusEl.textContent = `❌ Gagal: ${response.error}`;
+         }
+       } catch (err) {
+         statusEl.textContent = `❌ Error: ${err.message}`;
+       }
+     });
+     ```
+  3. **popup.css:** Styling sederhana, profesional, minimal. Lebar popup 320px.
+- **Acceptance Criteria:**
+  - Klik tombol → status berubah ke "Mengekstrak..." → lalu berubah ke hasil.
+  - Error ditampilkan di status (bukan alert dialog).
+  - Popup terlihat rapi di Chrome.
 
 ---
 
-## Phase 4 — Figma Plugin Core (Rendering Engine)
+### `T6.2` — Integrasi Pipeline End-to-End
 
-> **Tujuan:** Membangun mesin yang bisa membaca data JSON dan menggambar ulang elemen-elemennya di kanvas Figma.  
-> **Estimasi:** 2–3 hari kerja  
-> **Prasyarat:** Phase 1 selesai (interface di `schema.ts` sudah final).
-
----
-
-### 4.1 Controller — Entry Point Plugin
-
-- [ ] **Buat file `controller.ts` di `figma-plugin/src/plugin/`**
-  - *Sub-tasks:*
-    - Buat folder `figma-plugin/src/plugin/` jika belum ada.
-    - Buat file `controller.ts` sebagai entry point plugin:
-      ```typescript
-      // Entry point plugin Figma — file ini dijalankan di sandbox Figma.
-      // Tidak ada akses ke DOM, window, atau fetch.
-
-      // Tampilkan UI plugin
-      figma.showUI(__html__, { width: 450, height: 500 });
-
-      // Dengarkan pesan dari UI
-      figma.ui.onmessage = async (message: { type: string; payload?: unknown }) => {
-        if (message.type === 'generate') {
-          console.log("[CodeToFrame] Received generate request.");
-          // Panggil renderer (akan diimplementasi di langkah selanjutnya)
-          // await renderElements(message.payload as CodeToFrameData);
-          figma.ui.postMessage({ type: 'status', message: 'Generation complete!' });
-        }
-
-        if (message.type === 'cancel') {
-          figma.closePlugin();
-        }
-      };
-      ```
-    - Import fungsi render dari `renderer.ts` (setelah `renderer.ts` dibuat).
-  - *Definition of Done (DoD):*
-    - File ada dan bisa di-compile.
-    - Plugin menampilkan UI saat dijalankan di Figma.
-    - Pesan dari UI diterima oleh controller.
-  - *Edge Cases to Handle:*
-    - `__html__` adalah placeholder yang disediakan oleh Figma build system — pastikan build pipeline mendukung ini (inline HTML ke bundle JS). Jika tidak, gunakan `figma.showUI(htmlString)` dengan HTML sebagai string.
-
----
-
-### 4.2 Utility: Konversi Warna
-
-- [ ] **Buat fungsi konversi warna dari format 0–255 ke format Figma 0–1**
-  - *Sub-tasks:*
-    - Di `renderer.ts` (atau file utility terpisah), buat fungsi:
-      ```typescript
-      /**
-       * Mengonversi warna RGB dari rentang 0–255 (format JSON kita)
-       * ke rentang 0–1 (format yang dibutuhkan Figma API).
-       *
-       * @param color - Objek RGBColor dengan nilai 0–255
-       * @returns Objek RGB dengan nilai 0–1, siap dipakai Figma API
-       */
-      function toFigmaColor(color: RGBColor): RGB {
-        return {
-          r: color.r / 255,
-          g: color.g / 255,
-          b: color.b / 255,
-        };
-      }
-      ```
-  - *Definition of Done (DoD):*
-    - `toFigmaColor({ r: 255, g: 128, b: 0 })` → `{ r: 1, g: ~0.502, b: 0 }`.
-    - `toFigmaColor({ r: 0, g: 0, b: 0 })` → `{ r: 0, g: 0, b: 0 }`.
-    - `toFigmaColor({ r: 255, g: 255, b: 255 })` → `{ r: 1, g: 1, b: 1 }`.
-  - *Edge Cases to Handle:*
-    - Nilai di luar rentang 0–255 (misalnya -10 atau 300): Clamp ke 0–255 sebelum membagi.
+- [ ] **Selesai**
+- **File Target:** `browser-extension/src/content/entry.js` (update final)
+- **Instruksi:**
+  1. Update `runExtractionPipeline()` untuk memanggil semua modul secara berurutan:
+     ```javascript
+     function runExtractionPipeline() {
+       // 1. Traverse DOM → bangun tree bersarang
+       const counter = { count: 0 };
+       const bodyRect = document.body.getBoundingClientRect();
+       const domTree = traverseDOM(document.body, bodyRect, 0, counter);
+       
+       // 2. Untuk setiap node di tree, ekstrak styles
+       enrichTreeWithStyles(domTree);
+       
+       // 3. Map ke format Figma
+       const figmaTree = mapToFigmaTree(domTree);
+       
+       // 4. Deduplicate layer names
+       deduplicateLayerNames(figmaTree);
+       
+       // 5. Assemble payload
+       const payload = assemblePayload(figmaTree);
+       
+       // 6. Tulis ke clipboard
+       const clipboardResult = writeToClipboard(payload);
+       
+       return {
+         nodeCount: counter.count,
+         clipboardMethod: clipboardResult.method,
+         payload: payload
+       };
+     }
+     ```
+  2. Fungsi `enrichTreeWithStyles(node)` → traversal rekursif yang memanggil `extractAllStyles()` untuk setiap node.
+  3. Fungsi `deduplicateLayerNames(tree)` → kumpulkan semua nama, panggil `deduplicateNames()`, update nama node.
+- **Acceptance Criteria:**
+  - Pipeline berjalan dari awal sampai akhir tanpa error.
+  - Clipboard terisi setelah pipeline selesai.
+  - Response ke popup mencakup `nodeCount`.
 
 ---
 
-### 4.3 Render Rectangle
+### `T6.3` — Buat Test Page
 
-- [ ] **Implementasi fungsi `renderRectangle()` di `renderer.ts`**
-  - *Sub-tasks:*
-    - Buat file `figma-plugin/src/plugin/renderer.ts`.
-    - Implementasi fungsi:
-      ```typescript
-      /**
-       * Membuat Rectangle node di kanvas Figma berdasarkan data dari JSON.
-       */
-      function renderRectangle(element: RectangleElement): RectangleNode {
-        const rect = figma.createRectangle();
-
-        // Atur posisi
-        rect.x = element.x;
-        rect.y = element.y;
-
-        // Atur dimensi (gunakan resize, bukan langsung set width/height)
-        rect.resize(element.width, element.height);
-
-        // Atur warna latar belakang
-        rect.fills = [{
-          type: 'SOLID',
-          color: toFigmaColor(element.backgroundColor),
-        }];
-
-        // Beri nama yang deskriptif untuk mudah dikenali di panel Layers
-        rect.name = `Rectangle ${element.x},${element.y}`;
-
-        return rect;
-      }
-      ```
-    - **Catatan penting tentang `resize()`:** Di Figma API, `node.width = x` akan error untuk beberapa tipe node. Selalu gunakan `node.resize(width, height)` yang lebih aman.
-  - *Definition of Done (DoD):*
-    - Fungsi membuat `RectangleNode` di kanvas Figma dengan posisi, dimensi, dan warna yang benar.
-    - Node muncul di panel Layers dengan nama yang deskriptif.
-  - *Edge Cases to Handle:*
-    - **Dimensi 0:** `figma.createRectangle()` dengan `resize(0, 0)` bisa bermasalah. Skip elemen dengan `width <= 0` atau `height <= 0`.
-    - **Posisi negatif:** Elemen yang sebagian di luar viewport bisa punya `x` atau `y` negatif. Ini valid di Figma — biarkan saja.
+- [ ] **Selesai**
+- **File Target:** `test/test-page.html`
+- **Instruksi:**
+  Buat halaman HTML statis yang menguji **semua** fitur:
+  ```html
+  <!-- Struktur yang harus ada: -->
+  - div bersarang 3 level (untuk test nested frames)
+  - div dengan display:flex, gap, padding (untuk test auto layout)
+  - h1 dengan font-weight:700, letter-spacing (untuk test tipografi)
+  - p dengan line-height, text-align:center (untuk test tipografi)
+  - img tag (untuk test image extraction)
+  - svg inline sederhana (untuk test vector extraction)
+  - div dengan display:none (harus di-skip)
+  - div dengan opacity:0 (harus di-skip)
+  - div dengan box-shadow (untuk test shadow extraction)
+  - div dengan border-radius (untuk test radius)
+  - div dengan border: 2px solid (untuk test border)
+  - div dengan linear-gradient background (untuk test gradient)
+  - elemen dengan class dan id (untuk test smart naming)
+  ```
+- **Acceptance Criteria:**
+  - File valid HTML yang bisa dibuka di Chrome.
+  - Setiap fitur v2.0 minimal ada 1 elemen pengujian.
+  - Elemen di-label dengan komentar HTML agar mudah ditelusuri.
 
 ---
 
-### 4.4 Render Text
+### `T6.4` — Sanity Test End-to-End
 
-- [ ] **Implementasi fungsi `renderText()` di `renderer.ts`**
-  - *Sub-tasks:*
-    - Implementasi fungsi **async** (karena `loadFontAsync` harus di-await):
-      ```typescript
-      /** Font default yang digunakan untuk semua teks di MVP. */
-      const DEFAULT_FONT: FontName = { family: "Inter", style: "Regular" };
+- [ ] **Selesai**
+- **File Target:** Tidak ada file baru — ini adalah prosedur pengujian manual.
+- **Instruksi:**
+  1. Build extension: `cd browser-extension && npm run build`.
+  2. Load unpacked di Chrome: `chrome://extensions` → Load unpacked → pilih `dist/`.
+  3. Buka `test/test-page.html` di Chrome.
+  4. Klik ekstensi CodeToFrame → klik "Extract & Copy".
+  5. Buka Figma → buat file baru → Ctrl+V (paste).
+  6. **Verifikasi:**
 
-      /**
-       * Membuat Text node di kanvas Figma berdasarkan data dari JSON.
-       * ⚠️ HARUS async karena perlu loadFontAsync sebelum mengubah teks.
-       */
-      async function renderText(element: TextElement): Promise<TextNode> {
-        const text = figma.createText();
+  | # | Yang Diperiksa | Kriteria PASS |
+  |:---:|---|---|
+  | 1 | Nested frames | `<div>` bersarang menjadi Frame bersarang di Figma |
+  | 2 | Smart naming | Layer bernama `div.container`, `h1#title`, dll. |
+  | 3 | Background color | Warna latar belakang sesuai |
+  | 4 | Border & radius | Border terlihat, sudut melengkung sesuai |
+  | 5 | Box shadow | Shadow terlihat di Figma |
+  | 6 | Auto Layout | Flex container menjadi Frame dengan Auto Layout |
+  | 7 | Typography | Font size, weight, line-height sesuai |
+  | 8 | Image | `<img>` menjadi Rectangle dengan image fill |
+  | 9 | SVG | SVG inline menjadi Vector node |
+  | 10 | Hidden elements | `display:none` dan `opacity:0` **TIDAK** muncul |
+  | 11 | Tidak ada crash | Console Chrome dan Figma bersih dari error merah |
 
-        // ⚠️ WAJIB: Load font SEBELUM mengubah properti teks apapun
-        await figma.loadFontAsync(DEFAULT_FONT);
-
-        // Atur konten teks
-        text.characters = element.textContent;
-
-        // Atur ukuran font
-        text.fontSize = element.fontSize;
-
-        // Atur posisi
-        text.x = element.x;
-        text.y = element.y;
-
-        // Atur dimensi
-        text.resize(element.width, element.height);
-
-        // Atur warna teks
-        text.fills = [{
-          type: 'SOLID',
-          color: toFigmaColor(element.textColor),
-        }];
-
-        // Beri nama deskriptif (potong teks jika terlalu panjang)
-        const previewText = element.textContent.substring(0, 30);
-        text.name = `Text: "${previewText}"`;
-
-        return text;
-      }
-      ```
-    - **KRITIS — Urutan operasi:** `figma.loadFontAsync()` **HARUS** dipanggil sebelum mengubah `characters`, `fontSize`, atau properti teks lainnya. Tanpa ini, Figma akan throw error. Tidak ada pengecualian.
-  - *Definition of Done (DoD):*
-    - Fungsi membuat `TextNode` di kanvas Figma dengan isi teks, ukuran font, posisi, dan warna yang benar.
-    - Tidak ada error "Cannot set characters on text node without loading font first".
-    - Node muncul di panel Layers dengan preview teks.
-  - *Edge Cases to Handle:*
-    - **Font "Inter" tidak tersedia:** Figma biasanya sudah menyertakan font Inter secara default. Tapi jika tidak tersedia, `loadFontAsync` akan error. Bungkus dalam try-catch:
-      ```typescript
-      try {
-        await figma.loadFontAsync(DEFAULT_FONT);
-      } catch (err) {
-        console.error("[CodeToFrame] Failed to load font Inter. Trying Roboto...", err);
-        await figma.loadFontAsync({ family: "Roboto", style: "Regular" });
-      }
-      ```
-    - **Teks kosong (`""`):** `text.characters = ""` valid di Figma, tapi menghasilkan node kosong. Pertimbangkan untuk skip elemen dengan `textContent.trim() === ""`.
-    - **Teks sangat panjang:** Teks dengan ribuan karakter bisa memperlambat Figma. Untuk MVP, terima apa adanya (bisa ditambahkan limit di masa depan).
-    - **Karakter khusus / Unicode:** `text.characters` mendukung Unicode secara native. Tidak perlu handling khusus.
+- **Acceptance Criteria:**
+  - Minimal 9 dari 11 poin di atas PASS.
+  - Tidak ada error merah di console Chrome maupun Figma.
+  - Popup menampilkan jumlah elemen yang diekstrak.
 
 ---
 
-### 4.5 Fungsi Utama: Render All Elements
+## Ringkasan Jumlah Tugas per Fase
 
-- [ ] **Implementasi fungsi utama `renderElements()` yang memproses seluruh array elemen**
-  - *Sub-tasks:*
-    - Di `renderer.ts`, buat fungsi:
-      ```typescript
-      /**
-       * Memproses seluruh array elemen dari CodeToFrameData
-       * dan menggambar masing-masing di kanvas Figma.
-       */
-      async function renderElements(data: CodeToFrameData): Promise<void> {
-        console.log(`[CodeToFrame] Starting render of ${data.elements.length} elements...`);
-
-        let renderedCount = 0;
-        let skippedCount = 0;
-
-        for (const element of data.elements) {
-          try {
-            switch (element.type) {
-              case "RECTANGLE":
-                renderRectangle(element);
-                renderedCount++;
-                break;
-              case "TEXT":
-                await renderText(element);
-                renderedCount++;
-                break;
-              default:
-                console.warn("[CodeToFrame] Unknown element type, skipping:", (element as { type: string }).type);
-                skippedCount++;
-            }
-          } catch (err) {
-            console.error("[CodeToFrame] Failed to render element:", element, err);
-            skippedCount++;
-          }
-        }
-
-        console.log(`[CodeToFrame] Render complete: ${renderedCount} rendered, ${skippedCount} skipped.`);
-
-        // Zoom ke area yang baru saja di-render agar pengguna langsung melihat hasilnya
-        figma.viewport.scrollAndZoomIntoView(figma.currentPage.children);
-
-        // Beritahu UI bahwa render selesai
-        figma.ui.postMessage({
-          type: 'render-complete',
-          renderedCount,
-          skippedCount,
-        });
-      }
-      ```
-    - **Catatan:** Setiap elemen di-render di dalam `try-catch` individual agar **satu elemen yang gagal tidak menghentikan seluruh proses**. Elemen yang gagal di-skip dan di-log.
-  - *Definition of Done (DoD):*
-    - Fungsi memproses semua elemen dari data JSON.
-    - Rectangle dan Text muncul di kanvas Figma dengan properti yang benar.
-    - Elemen yang gagal di-skip tanpa menghentikan proses.
-    - Viewport otomatis scroll ke area yang di-render.
-    - Console log menampilkan jumlah elemen yang berhasil dan yang di-skip.
-  - *Edge Cases to Handle:*
-    - **Data kosong (`elements: []`):** Fungsi selesai tanpa error, tampilkan pesan "No elements to render."
-    - **Tipe elemen tidak dikenal (future-proofing):** Switch case punya `default` yang skip elemen dengan warning.
-    - **Plugin ditutup saat rendering berlangsung:** Ini bisa menyebabkan error "Plugin was closed" — tidak perlu ditangani di MVP (Figma menangani ini sendiri).
+| Fase | Jumlah Task | Estimasi Waktu |
+|---|---|---|
+| Fase 0: Restrukturisasi | 3 task | 1 hari |
+| Fase 1: Utilitas | 6 task | 2-3 hari |
+| Fase 2: DOM Traversal | 3 task | 2-3 hari |
+| Fase 3: CSS Extraction | 6 task | 3-4 hari |
+| Fase 4: Aset Visual | 3 task | 1-2 hari |
+| Fase 5: Figma Payload | 4 task | 2-3 hari |
+| Fase 6: Integrasi & Test | 4 task | 2-3 hari |
+| **Total** | **29 task** | **13-19 hari kerja** |
 
 ---
 
-### 4.6 Integrasi Controller ↔ Renderer
-
-- [ ] **Hubungkan controller.ts dengan renderer.ts**
-  - *Sub-tasks:*
-    - Di `controller.ts`, import dan panggil fungsi `renderElements`:
-      ```typescript
-      figma.ui.onmessage = async (message: { type: string; payload?: unknown }) => {
-        if (message.type === 'generate') {
-          try {
-            // Validasi data JSON
-            const data = message.payload;
-            if (!isValidCodeToFrameData(data)) {
-              figma.ui.postMessage({ type: 'error', message: 'Invalid JSON format.' });
-              return;
-            }
-
-            figma.ui.postMessage({ type: 'status', message: `Rendering ${data.elements.length} elements...` });
-
-            await renderElements(data);
-
-            figma.ui.postMessage({ type: 'status', message: 'Generation complete!' });
-          } catch (err) {
-            console.error("[CodeToFrame] Render failed:", err);
-            figma.ui.postMessage({ type: 'error', message: 'Rendering failed. Check console for details.' });
-          }
-        }
-      };
-      ```
-    - **Catatan tentang bundling:** Karena Figma sandbox tidak mendukung ES modules secara native, file `controller.ts` dan `renderer.ts` mungkin perlu di-bundle menjadi **satu file JS**. Opsi:
-      1. Gunakan `tsc` dengan `outFile` dan namespaces (rumit).
-      2. Gunakan bundler sederhana (esbuild) untuk bundle semua file ke satu output.
-      3. Tulis semua kode di satu file (paling sederhana untuk MVP).
-    - Pilih pendekatan yang paling sederhana untuk MVP dan dokumentasikan keputusannya.
-  - *Definition of Done (DoD):*
-    - Controller menerima pesan `generate` → memanggil renderer → elemen muncul di kanvas.
-    - JSON yang invalid ditolak dengan pesan error ke UI.
-    - Error saat rendering ditangkap dan dilaporkan ke UI.
-  - *Edge Cases to Handle:*
-    - **Double-click "Generate":** Jika pengguna menekan Generate dua kali, elemen bisa terduplikat. Pertimbangkan untuk disable tombol selama rendering (ditangani di UI, Phase 5).
-
----
-
-### ✅ Checkpoint Phase 4
-
-| # | Cek | Status |
-|:---:|---|:---:|
-| 1 | `controller.ts` dan `renderer.ts` ada dan bisa di-compile | [ ] |
-| 2 | `toFigmaColor()` mengonversi warna dengan benar | [ ] |
-| 3 | `renderRectangle()` membuat node dengan posisi, dimensi, dan warna benar | [ ] |
-| 4 | `renderText()` membuat node teks dengan font di-load terlebih dahulu | [ ] |
-| 5 | `renderElements()` memproses semua elemen dan menghitung rendered/skipped | [ ] |
-| 6 | Controller terintegrasi dengan renderer (pesan → render → feedback) | [ ] |
-| 7 | Validasi JSON dilakukan sebelum rendering | [ ] |
-| 8 | Error individual tidak menghentikan seluruh proses rendering | [ ] |
-| 9 | `npx tsc --noEmit` lolos | [ ] |
-| 10 | Commit ke Git | [ ] |
-
----
-
-## Phase 5 — Figma Plugin UI & Message Handler
-
-> **Tujuan:** Membangun antarmuka pengguna plugin Figma — tempat pengguna paste JSON dan memulai proses rendering.  
-> **Estimasi:** 1 hari kerja  
-> **Prasyarat:** Phase 4 selesai (renderer sudah berfungsi).
-
----
-
-### 5.1 Plugin UI — HTML
-
-- [ ] **Buat file `ui.html` di `figma-plugin/src/ui/`**
-  - *Sub-tasks:*
-    - Buat folder `figma-plugin/src/ui/` jika belum ada.
-    - Buat file `ui.html` dengan struktur berikut:
-      ```html
-      <!-- CATATAN: File ini berjalan di iframe Figma. Punya akses DOM tapi TIDAK bisa akses Figma API. -->
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <link rel="stylesheet" href="ui.css">
-      </head>
-      <body>
-        <h2>CodeToFrame</h2>
-        <p>Paste JSON data dari browser extension, lalu klik "Generate Design".</p>
-
-        <textarea id="json-input" placeholder="Paste JSON here..."></textarea>
-
-        <div id="status-area"></div>
-
-        <div class="button-group">
-          <button id="btn-generate" type="button">Generate Design</button>
-          <button id="btn-cancel" type="button">Cancel</button>
-        </div>
-
-        <script>
-          // Inline script karena Figma plugin UI tidak mendukung external JS files
-          // Seluruh logika UI ditulis di sini
-
-          const jsonInput = document.getElementById('json-input');
-          const btnGenerate = document.getElementById('btn-generate');
-          const btnCancel = document.getElementById('btn-cancel');
-          const statusArea = document.getElementById('status-area');
-
-          // Tombol Generate
-          btnGenerate.addEventListener('click', () => {
-            const raw = jsonInput.value.trim();
-            if (!raw) {
-              showStatus('Please paste JSON data first.', 'error');
-              return;
-            }
-
-            let parsed;
-            try {
-              parsed = JSON.parse(raw);
-            } catch (err) {
-              showStatus('Invalid JSON format. Please check your data.', 'error');
-              return;
-            }
-
-            // Disable tombol selama proses rendering
-            btnGenerate.disabled = true;
-            btnGenerate.textContent = 'Generating...';
-            showStatus('Sending data to plugin...', 'info');
-
-            // Kirim data ke sandbox plugin
-            parent.postMessage({
-              pluginMessage: { type: 'generate', payload: parsed }
-            }, '*');
-          });
-
-          // Tombol Cancel
-          btnCancel.addEventListener('click', () => {
-            parent.postMessage({ pluginMessage: { type: 'cancel' } }, '*');
-          });
-
-          // Terima pesan dari sandbox plugin (feedback)
-          window.onmessage = (event) => {
-            const msg = event.data.pluginMessage;
-            if (!msg) return;
-
-            if (msg.type === 'status') {
-              showStatus(msg.message, 'info');
-            }
-            if (msg.type === 'render-complete') {
-              showStatus(
-                `Done! ${msg.renderedCount} elements rendered, ${msg.skippedCount} skipped.`,
-                'success'
-              );
-              btnGenerate.disabled = false;
-              btnGenerate.textContent = 'Generate Design';
-            }
-            if (msg.type === 'error') {
-              showStatus(msg.message, 'error');
-              btnGenerate.disabled = false;
-              btnGenerate.textContent = 'Generate Design';
-            }
-          };
-
-          function showStatus(message, type) {
-            statusArea.textContent = message;
-            statusArea.className = 'status-' + type;
-          }
-        </script>
-      </body>
-      </html>
-      ```
-    - **Catatan:** Script ditulis inline di dalam `<script>` tag karena Figma plugin UI **tidak mendukung** file JavaScript eksternal secara langsung. Semua logika UI harus ada di dalam `ui.html`.
-  - *Definition of Done (DoD):*
-    - File `ui.html` ada dan menampilkan UI yang fungsional di dalam Figma.
-    - Textarea bisa menerima paste JSON.
-    - Tombol "Generate Design" mengirim data ke sandbox plugin via `postMessage`.
-    - Tombol "Cancel" menutup plugin.
-    - Area status menampilkan feedback dari plugin.
-  - *Edge Cases to Handle:*
-    - **JSON yang sangat besar:** Textarea bisa lambat dengan JSON > 1MB. Untuk MVP, terima apa adanya.
-    - **Double-click Generate:** Tombol di-disable selama proses rendering untuk mencegah duplikasi.
-    - **Paste event:** Pertimbangkan menambahkan listener `paste` event untuk otomatis mendeteksi paste dan memberi feedback.
-
----
-
-### 5.2 Plugin UI — CSS
-
-- [ ] **Buat file `ui.css` untuk styling antarmuka plugin**
-  - *Sub-tasks:*
-    - Buat file `figma-plugin/src/ui/ui.css`.
-    - Style yang diperlukan:
-      - `body`: font-family Figma standard (`Inter`, `sans-serif`), padding, max-width.
-      - `textarea#json-input`: full-width, min-height 200px, font-family monospace, resize vertikal.
-      - `.button-group`: flexbox layout untuk tombol-tombol.
-      - `#btn-generate`: primary style (warna biru Figma `#0D99FF` atau serupa).
-      - `#btn-cancel`: secondary/tertiary style (abu-abu, outline).
-      - `#btn-generate:disabled`: opacity berkurang, cursor `not-allowed`.
-      - `#status-area`: area untuk pesan status.
-      - `.status-info`: warna biru/abu.
-      - `.status-success`: warna hijau.
-      - `.status-error`: warna merah.
-  - *Definition of Done (DoD):*
-    - UI terlihat rapi dan konsisten dengan estetika Figma.
-    - Semua state visual (normal, disabled, success, error) tertangani.
-
----
-
-### 5.3 Komunikasi Dua Arah UI ↔ Sandbox
-
-- [ ] **Pastikan komunikasi dua arah antara UI dan sandbox berfungsi**
-  - *Sub-tasks:*
-    - **UI → Sandbox:**
-      - `parent.postMessage({ pluginMessage: { type: 'generate', payload: data } }, '*')` — mengirim JSON ke controller.
-      - `parent.postMessage({ pluginMessage: { type: 'cancel' } }, '*')` — menutup plugin.
-    - **Sandbox → UI:**
-      - `figma.ui.postMessage({ type: 'status', message: '...' })` — mengirim update status.
-      - `figma.ui.postMessage({ type: 'render-complete', renderedCount, skippedCount })` — memberitahu render selesai.
-      - `figma.ui.postMessage({ type: 'error', message: '...' })` — memberitahu ada error.
-    - Test: Buka plugin di Figma, paste JSON valid, klik Generate → elemen muncul di kanvas DAN status berubah ke "Done!".
-    - Test: Paste JSON invalid → status menampilkan pesan error.
-  - *Definition of Done (DoD):*
-    - Pesan dari UI diterima di sandbox (controller.ts).
-    - Pesan dari sandbox diterima di UI (window.onmessage).
-    - Status UI berubah sesuai tahapan proses.
-  - *Edge Cases to Handle:*
-    - **`postMessage` gagal silently:** Tidak ada error jika pesan tidak diterima — pastikan listener sudah terpasang sebelum pesan dikirim.
-
----
-
-### 5.4 Build & Load Plugin di Figma
-
-- [ ] **Verifikasi build dan load plugin ke Figma**
-  - *Sub-tasks:*
-    - Jalankan `npm run build` di `figma-plugin/`.
-    - Periksa folder `dist/` — pastikan berisi `plugin/controller.js`.
-    - Pastikan `manifest.json` mengarah ke path yang benar.
-    - Buka Figma Desktop → Plugins → Development → Import plugin from manifest → pilih `figma-plugin/manifest.json`.
-    - Buka file Figma → jalankan plugin → UI muncul.
-    - Paste JSON sederhana (bisa buat contoh manual) → klik Generate → elemen muncul di kanvas.
-  - *Definition of Done (DoD):*
-    - Plugin bisa di-load di Figma tanpa error.
-    - UI muncul dengan textarea dan tombol.
-    - Generate berfungsi — elemen muncul di kanvas.
-  - *Edge Cases to Handle:*
-    - Jika `ui.html` tidak ditemukan, periksa path `"ui"` di `manifest.json`.
-    - Jika `controller.js` error saat load, periksa console Figma (open via menu > Plugins > Development > Open Console).
-
----
-
-### ✅ Checkpoint Phase 5
-
-| # | Cek | Status |
-|:---:|---|:---:|
-| 1 | `ui.html` dan `ui.css` ada dan menampilkan UI yang rapi | [ ] |
-| 2 | Textarea bisa menerima paste JSON | [ ] |
-| 3 | Tombol "Generate" mengirim data dan disabled selama proses | [ ] |
-| 4 | Tombol "Cancel" menutup plugin | [ ] |
-| 5 | Status pesan berubah: info → success/error | [ ] |
-| 6 | Komunikasi dua arah UI ↔ Sandbox berfungsi | [ ] |
-| 7 | JSON invalid ditolak dengan pesan error yang jelas | [ ] |
-| 8 | Plugin bisa di-load dan dijalankan di Figma | [ ] |
-| 9 | Commit ke Git | [ ] |
-
----
-
-## Phase 6 — End-to-End Integration Testing & Quality Assurance
-
-> **Tujuan:** Memastikan **seluruh alur** dari Browser Extension ke Figma Plugin bekerja dengan sempurna. Menangkap bug, memperbaiki edge case, dan memoles kualitas kode.  
-> **Estimasi:** 1–2 hari kerja  
-> **Prasyarat:** Phase 3 dan Phase 5 selesai (extension dan plugin sudah berfungsi mandiri).
-
----
-
-### 6.1 Buat Halaman Test HTML
-
-- [ ] **Buat halaman web HTML sederhana untuk testing**
-  - *Sub-tasks:*
-    - Buat file `test-page.html` di root repositori (atau di folder `test/`).
-    - Halaman harus mengandung:
-      - **3–5 Rectangle elements:** `<div>` dengan background-color bervariasi (merah, biru, hijau, dsb.), ukuran berbeda, posisi berbeda.
-      - **3–5 Text elements:** `<h1>`, `<p>`, `<span>` dengan teks bervariasi, font-size berbeda, warna teks berbeda.
-      - **1 elemen yang punya background + text:** `<button>` dengan background-color dan teks di dalamnya.
-      - **1 elemen tersembunyi:** `<div style="display: none">Hidden</div>` — harus di-skip.
-      - **1 elemen transparan:** `<div style="background: transparent">Transparent BG</div>` — background harus di-skip.
-      - **1 elemen out-of-scope:** `<img src="...">` — harus di-skip.
-    - Semua elemen menggunakan **posisi absolut** atau setidaknya posisi yang bisa diprediksi via `getBoundingClientRect`.
-  - *Definition of Done (DoD):*
-    - File `test-page.html` bisa dibuka di browser.
-    - Halaman menampilkan berbagai elemen visual yang mencakup semua skenario MVP.
-
----
-
-### 6.2 End-to-End Smoke Test
-
-- [ ] **Lakukan pengujian end-to-end dari extension ke plugin**
-  - *Sub-tasks:*
-    1. Buka `test-page.html` di Chrome.
-    2. Klik ikon ekstensi CodeToFrame → popup muncul.
-    3. Klik "Extract DOM" → JSON muncul di popup.
-    4. **Verifikasi JSON:**
-       - `sourceUrl` mengarah ke path `test-page.html`.
-       - `viewportWidth` dan `viewportHeight` sesuai.
-       - `elements` berisi elemen Rectangle dan Text yang diharapkan.
-       - Elemen tersembunyi (`display: none`) TIDAK ada di JSON.
-       - Elemen out-of-scope (`<img>`) TIDAK ada di JSON.
-       - Background transparan TIDAK menghasilkan Rectangle.
-    5. Klik "Copy JSON" → JSON tersalin ke clipboard.
-    6. Buka Figma → jalankan plugin CodeToFrame.
-    7. Paste JSON ke textarea → klik "Generate Design".
-    8. **Verifikasi di kanvas Figma:**
-       - Rectangle muncul di posisi yang benar (bandingkan visual dengan browser).
-       - Text muncul dengan isi teks yang benar.
-       - Warna Rectangle dan Text sesuai.
-       - Ukuran font teks sesuai.
-       - Status menampilkan "Done! X elements rendered, Y skipped."
-  - *Definition of Done (DoD):*
-    - Seluruh alur dari extension ke plugin berjalan tanpa error.
-    - Elemen di Figma secara visual **menyerupai** layout asli di browser (tidak harus pixel-perfect, tapi harus recognizable).
-  - *Edge Cases to Handle:*
-    - Jika posisi elemen "meleset" jauh, cek apakah `scrollX`/`scrollY` perlu diperhitungkan di `getBoundingClientRect`.
-
----
-
-### 6.3 Test pada Website Nyata
-
-- [ ] **Lakukan pengujian pada 2–3 halaman web nyata (bukan test page)**
-  - *Sub-tasks:*
-    - **Website 1:** Halaman landing page sederhana (misalnya: halaman statis dengan header, hero section, beberapa card). Contoh: halaman marketing yang simpel.
-    - **Website 2:** Halaman blog/artikel (misalnya: banyak teks dengan heading berbeda).
-    - **Website 3 (opsional):** Halaman dashboard sederhana (banyak kotak/card dengan background berwarna).
-    - Untuk setiap website:
-      1. Extract DOM → copy JSON.
-      2. Paste ke Figma plugin → Generate.
-      3. Bandingkan hasil visual secara kasar.
-      4. Catat temuan: elemen yang kurang, warna yang salah, posisi yang meleset, dsb.
-    - Buat daftar bug/issue yang ditemukan.
-  - *Definition of Done (DoD):*
-    - Minimal 2 website nyata berhasil diekstrak dan di-render di Figma tanpa crash.
-    - Hasil visual "cukup mirip" dengan aslinya (harapan realistis untuk MVP: 60–80% kemiripan visual).
-    - Daftar bug/issue terdokumentasi.
-  - *Edge Cases to Handle:*
-    - Website dengan CSS framework (Bootstrap, Tailwind) → harus tetap bekerja karena kita baca `getComputedStyle` (sudah resolved).
-    - Website dengan banyak overlay/modal → elemen overlay bisa menimpa elemen di bawahnya. Ini normal di MVP.
-
----
-
-### 6.4 Code Quality Review
-
-- [ ] **Review kualitas kode secara menyeluruh**
-  - *Sub-tasks:*
-    - Jalankan `npx tsc --noEmit` di kedua proyek — pastikan **zero errors**.
-    - Jalankan `npm run lint` (jika sudah setup) — perbaiki semua warning dan error.
-    - Review checklist kualitas kode:
-      - [ ] Tidak ada tipe `any` di seluruh codebase.
-      - [ ] Semua promise di-`await` (tidak ada floating promise).
-      - [ ] Semua fungsi yang diekspor punya JSDoc comment.
-      - [ ] Console log menggunakan prefix `[CodeToFrame]`.
-      - [ ] Tidak ada `console.log` debugging yang tertinggal (hanya log yang intentional).
-      - [ ] Tidak ada kode yang di-comment-out tanpa penjelasan.
-      - [ ] Semua variabel menggunakan `const` (kecuali memang perlu `let`).
-      - [ ] Error handling menggunakan try-catch di titik-titik kritis.
-      - [ ] Tidak ada hardcoded magic number tanpa konstanta yang menjelaskan.
-    - Perbaiki semua temuan.
-  - *Definition of Done (DoD):*
-    - Zero TypeScript errors.
-    - Zero ESLint errors (jika setup).
-    - Semua item checklist kualitas kode terpenuhi.
-
----
-
-### 6.5 Performa Dasar
-
-- [ ] **Verifikasi performa dasar — tidak ada bottleneck yang jelas**
-  - *Sub-tasks:*
-    - **Extension — waktu ekstraksi:**
-      - Tambahkan timing di `extractElements()`:
-        ```typescript
-        const startTime = performance.now();
-        // ... extraction logic ...
-        const endTime = performance.now();
-        console.log(`[CodeToFrame] Extraction took ${(endTime - startTime).toFixed(0)}ms`);
-        ```
-      - Target: Ekstraksi halaman sederhana (< 100 elemen) selesai dalam **< 500ms**.
-      - Jika melebihi 1 detik untuk halaman sederhana, cari bottleneck (biasanya di loop `getComputedStyle`).
-    - **Plugin — waktu render:**
-      - Tambahkan timing di `renderElements()`:
-        ```typescript
-        const startTime = Date.now(); // Figma sandbox tidak punya performance.now()
-        // ... render logic ...
-        console.log(`[CodeToFrame] Rendering took ${Date.now() - startTime}ms`);
-        ```
-      - Target: Render 50 elemen selesai dalam **< 2 detik**.
-    - **Ukuran JSON:**
-      - Pastikan JSON untuk halaman sederhana tidak lebih dari **500KB**. Jika terlalu besar, cek apakah ada elemen yang tidak perlu diekstrak.
-  - *Definition of Done (DoD):*
-    - Ekstraksi halaman sederhana < 500ms.
-    - Render 50 elemen < 2 detik.
-    - Tidak ada memory leak yang jelas (tab Chrome tidak menggunakan memori berlebihan setelah extraction).
-
----
-
-### 6.6 Dokumentasi Final
-
-- [ ] **Update semua dokumentasi sesuai implementasi final**
-  - *Sub-tasks:*
-    - Update `README.md` dengan:
-      - Deskripsi proyek.
-      - Screenshot atau GIF demo (jika memungkinkan).
-      - Petunjuk instalasi (cara load extension dan plugin).
-      - Petunjuk penggunaan dasar (langkah 1–5).
-    - Review `PRD.md` — pastikan fitur yang tercantum sesuai dengan yang diimplementasi.
-    - Review `ARCHITECTURE.md` — pastikan diagram dan penjelasan masih akurat.
-    - Review `AGENTS.md` — pastikan aturan dan directory structure masih sesuai.
-    - Pastikan `TODO.md` ini memiliki semua checkbox ter-centang.
-  - *Definition of Done (DoD):*
-    - Semua dokumentasi konsisten dengan kode.
-    - `README.md` cukup jelas bagi orang baru yang pertama kali melihat repo.
-
----
-
-### ✅ Checkpoint Phase 6 (Final!)
-
-| # | Cek | Status |
-|:---:|---|:---:|
-| 1 | End-to-end test pada test page berhasil | [ ] |
-| 2 | Test pada 2+ website nyata berhasil tanpa crash | [ ] |
-| 3 | Zero TypeScript errors di kedua proyek | [ ] |
-| 4 | Tidak ada tipe `any` di codebase | [ ] |
-| 5 | Performa extraction < 500ms, render < 2s (halaman sederhana) | [ ] |
-| 6 | Dokumentasi ter-update | [ ] |
-| 7 | Commit final ke Git | [ ] |
-| 8 | 🎉 **MVP v1.0 SELESAI!** | [ ] |
-
----
-
-## Ringkasan: Peta Perjalanan Lengkap
-
-```
-Phase 0: Setup          ██░░░░░░░░░░░░░░░░░░  (fondasi)
-Phase 1: Contracts      ████░░░░░░░░░░░░░░░░  (kontrak data)
-Phase 2: Ext. Core      ████████░░░░░░░░░░░░  (mesin ekstraksi)
-Phase 3: Ext. UI        ██████████░░░░░░░░░░  (antarmuka extension)
-Phase 4: Plugin Core    ██████████████░░░░░░  (mesin render)
-Phase 5: Plugin UI      ████████████████░░░░  (antarmuka plugin)
-Phase 6: Testing & QA   ████████████████████  (polish & ship!)
-```
-
-> **Pesan penutup:** Dokumen ini sengaja dibuat sangat detail agar tidak ada ambiguitas. Jika kamu ragu di satu langkah, baca ulang sub-tasks-nya. Jika masih ragu, **tanya** — jangan berasumsi. Semangat membangun CodeToFrame! 🚀
-
----
-
-*End of Master Execution Plan.*
+*Kerjakan tugas secara berurutan. Jangan loncat fase. Setiap tugas dirancang agar bisa diselesaikan dalam 1-4 jam oleh satu developer. Jika sebuah tugas memakan waktu > 1 hari, kemungkinan ada hal yang perlu dipecah lebih lanjut — tanyakan ke Lead.*
