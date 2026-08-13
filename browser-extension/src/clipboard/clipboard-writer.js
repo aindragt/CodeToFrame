@@ -1,75 +1,53 @@
 /**
  * @file clipboard-writer.js
- * @description Modul untuk menulis payload desain terstruktur ke clipboard OS dengan metode
- * dual-MIME (text/html dan text/plain) agar langsung dikenali oleh kanvas Figma secara native.
+ * @description Modul untuk menulis payload desain JSON terstruktur ke clipboard OS
+ * dalam format 'text/plain' agar dapat di-paste secara manual ke dalam figma-plugin.
  */
 
 /**
- * Menulis payload data ExtractionPayload ke clipboard OS secara asinkron (Dual-MIME Blob).
+ * Menulis payload data ExtractionPayload ke clipboard OS secara asinkron dalam format text/plain.
  *
- * @param {string} payloadHTML - String HTML yang akan ditulis ke MIME 'text/html'.
- * @param {string} payloadJSON - String JSON yang akan ditulis ke MIME 'text/plain'.
+ * @param {string} payloadHTML - Diabaikan (dipertahankan untuk kompatibilitas signature).
+ * @param {string} payloadJSON - String JSON terformat yang akan disalin ke clipboard.
  * @returns {Promise<{success: boolean, method: string, error?: string}>} Status penulisan clipboard.
  */
 export async function writeToClipboard(payloadHTML, payloadJSON) {
-  if (!payloadHTML || !payloadJSON) {
-    return { success: false, method: 'none', error: 'Payload tidak valid.' };
+  if (!payloadJSON) {
+    return { success: false, method: 'none', error: 'Payload JSON kosong atau tidak valid.' };
   }
 
-  // Bungkus dalam tag HTML standar dengan metadata pendukung agar aman di-parsing oleh Figma
-  const wrappedHtml = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-</head>
-<body>
-${payloadHTML}
-</body>
-</html>`;
-
   try {
-    // 1. Coba menggunakan ClipboardItem API dengan Blob ganda (MIME Injection)
-    if (typeof ClipboardItem !== 'undefined') {
-      const htmlBlob = new Blob([wrappedHtml], { type: 'text/html' });
-      const textBlob = new Blob([payloadJSON], { type: 'text/plain' });
-
-      const clipboardItem = new ClipboardItem({
-        'text/html': htmlBlob,
-        'text/plain': textBlob
-      });
-
-      await navigator.clipboard.write([clipboardItem]);
-      return { success: true, method: 'native-dual-blob' };
-    }
+    // 1. Coba menggunakan API clipboard modern writeText
+    await navigator.clipboard.writeText(payloadJSON);
+    return { success: true, method: 'native-text' };
   } catch (error) {
-    console.warn('[CodeToFrame] Dual-MIME Blob injection gagal, mencoba fallback writeText:', error.message);
+    console.warn('[CodeToFrame] navigator.clipboard.writeText gagal di popup context:', error.message);
   }
 
-  // 2. Fallback menggunakan event listener sinkron (Defensive Cross-MIME Fallback)
+  // 2. Fallback menggunakan execCommand copy melalui textarea sementara
   try {
-    const handleCopy = (e) => {
-      e.clipboardData.setData('text/html', wrappedHtml);
-      e.clipboardData.setData('text/plain', payloadJSON);
-      e.preventDefault(); // Mencegah copy default browser
-    };
-
-    document.addEventListener('copy', handleCopy);
+    const textarea = document.createElement('textarea');
+    textarea.value = payloadJSON;
+    
+    // Sembunyikan elemen secara visual
+    Object.assign(textarea.style, {
+      position: 'fixed',
+      top: '-9999px',
+      left: '-9999px',
+      opacity: '0'
+    });
+    
+    document.body.appendChild(textarea);
+    textarea.select();
     const success = document.execCommand('copy');
-    document.removeEventListener('copy', handleCopy);
+    textarea.remove();
 
     if (success) {
-      return { success: true, method: 'fallback-exec-copy-dual' };
+      return { success: true, method: 'fallback-exec-copy' };
     }
-  } catch (execError) {
-    console.warn('[CodeToFrame] Fallback copy event listener gagal:', execError.message);
-  }
-
-  // 3. Fallback terakhir ke writeText biasa (Hanya text/plain JSON)
-  try {
-    await navigator.clipboard.writeText(payloadJSON);
-    return { success: true, method: 'fallback-text-only' };
-  } catch (lastError) {
-    console.error('[CodeToFrame] Semua metode clipboard gagal:', lastError.message);
-    return { success: false, method: 'none', error: lastError.message };
+    throw new Error('document.execCommand copy mengembalikan nilai false.');
+  } catch (fallbackError) {
+    console.error('[CodeToFrame] Semua metode clipboard gagal:', fallbackError.message);
+    return { success: false, method: 'none', error: fallbackError.message };
   }
 }
