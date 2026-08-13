@@ -1,12 +1,11 @@
 /**
  * @file entry.js
  * @description Modul entry point untuk Content Script. Merangkai pipeline ekstraksi DOM,
- * style visual, pemetaan node Figma, dan penulisan native clipboard.
+ * style visual, pemetaan node Figma, dan mengembalikan data payload Figma ke popup.
  */
 
 import { parseDOMRecursive } from './dom-traverser.js';
 import { mapToFigmaTree, assemblePayload } from './figma-mapper.js';
-import { writeToClipboard } from '../clipboard/clipboard-writer.js';
 
 /**
  * Menampilkan notifikasi visual toast di DOM halaman web.
@@ -66,13 +65,13 @@ function showToast(message, type = 'success') {
 }
 
 /**
- * Menjalankan seluruh pipeline ekstraksi CodeToFrame v2.0.
+ * Menjalankan seluruh pipeline ekstraksi data DOM & CSS CodeToFrame v2.0.
  *
  * @param {HTMLElement} [targetElement=document.body] - Elemen DOM target yang akan diekstraksi.
- * @returns {Promise<{success: boolean, nodeCount?: number, error?: string}>} Hasil jalannya pipeline.
+ * @returns {Promise<{success: boolean, nodeCount?: number, payload?: Object, error?: string}>} Hasil ekstraksi data.
  */
 export async function runCodeToFramePipeline(targetElement = document.body) {
-  console.log('[CodeToFrame] Memulai pipeline ekstraksi...');
+  console.log('[CodeToFrame] Memulai pipeline ekstraksi data...');
 
   try {
     if (!targetElement) {
@@ -97,26 +96,19 @@ export async function runCodeToFramePipeline(targetElement = document.body) {
     // 3. Bungkus menjadi payload final
     const payload = assemblePayload(figmaTree);
 
-    // 4. Injeksi clipboard menggunakan dual-MIME Clipboard API
-    const clipboardResult = await writeToClipboard(payload);
-
-    if (!clipboardResult.success) {
-      throw new Error(clipboardResult.error || 'Gagal menyalin data ke clipboard.');
-    }
-
-    const successMsg = `Berhasil! ${counter.count} elemen siap di-paste di Figma via ${clipboardResult.method === 'native' ? 'Paste Langsung' : 'Plugin'}.`;
+    const successMsg = `Ekstraksi selesai! Memproses penyalinan ${counter.count} elemen...`;
     console.log(`[CodeToFrame] ${successMsg}`);
     showToast(successMsg, 'success');
 
     return {
       success: true,
       nodeCount: counter.count,
-      method: clipboardResult.method
+      payload: payload
     };
 
   } catch (error) {
     const errorMsg = error.message || 'Error tidak diketahui selama ekstraksi.';
-    console.error('[CodeToFrame] Pipeline gagal:', errorMsg);
+    console.error('[CodeToFrame] Pipeline ekstraksi gagal:', errorMsg);
     showToast(`Gagal: ${errorMsg}`, 'error');
     
     return {
