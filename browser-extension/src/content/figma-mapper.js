@@ -2,10 +2,10 @@
  * @file figma-mapper.js
  * @description Modul untuk memetakan representasi internal DOMNodeTree ke model representasi
  * data node Figma (FigmaNodeTree) beserta visual properties, auto layout, dan asset visual.
+ * Diperkaya dengan penentuan styles per node untuk digunakan oleh serializer.
  */
 
 import { extractAllStyles } from './style-extractor.js';
-import { parseRGBAToFigma } from '../utils/utils.js';
 
 /**
  * Membuat nama layer Figma berdasarkan tag name, class list, dan ID elemen.
@@ -16,15 +16,22 @@ import { parseRGBAToFigma } from '../utils/utils.js';
  * @param {string} id - ID elemen.
  * @returns {string} Nama layer terformat.
  */
-function generateLayerName(tagName, className, id) {
+export function generateLayerName(tagName, className, id) {
   const cleanTagName = (tagName || 'div').toLowerCase();
   let name = cleanTagName;
 
   if (className) {
-    // Bersihkan spasi berlebih dan ambil 2 class pertama
-    const classes = className.trim().split(/\s+/).filter(Boolean).slice(0, 2);
-    if (classes.length > 0) {
-      name += '.' + classes.join('.');
+    // Bersihkan spasi berlebih dan ambil 2 class pertama (utamakan class semantik jika memungkinkan)
+    // Abaikan utility class Tailwind/Bootstrap yang umum jika ada class lain
+    const utilityPattern = /^(mt-|mb-|mr-|ml-|pt-|pb-|pr-|pl-|flex|grid|w-|h-|col-|row-|bg-|text-|border-|opacity-|z-|p-)/;
+    let classes = className.trim().split(/\s+/).filter(Boolean);
+    
+    const semanticClasses = classes.filter(c => !utilityPattern.test(c));
+    const finalClasses = semanticClasses.length > 0 ? semanticClasses : classes;
+    
+    const sliced = finalClasses.slice(0, 2);
+    if (sliced.length > 0) {
+      name += '.' + sliced.join('.');
     }
   }
 
@@ -69,16 +76,18 @@ export function mapToFigmaTree(domNode) {
       width: domNode.width,
       height: domNode.height,
       styles: extractedStyles,
-      children: []
+      children: [],
+      tagName: domNode.tagName
     };
 
     // 5. Tambahkan properti spesifik berdasarkan tipe node
     if (domNode.type === 'IMAGE' && domNode.imageSrc) {
-      figmaNode.imageUrl = domNode.imageSrc;
+      figmaNode.imageSrc = domNode.imageSrc;
+      figmaNode.type = 'IMAGE';
     }
 
     if (domNode.type === 'SVG' && domNode.svgContent) {
-      figmaNode.type = 'VECTOR';
+      figmaNode.type = 'SVG';
       figmaNode.svgContent = domNode.svgContent;
     }
 
@@ -86,7 +95,6 @@ export function mapToFigmaTree(domNode) {
       figmaNode.type = 'TEXT';
       // Mengambil teks dari element DOM asli (inner text)
       figmaNode.textContent = domNode.element ? (domNode.element.innerText || domNode.element.textContent || '').trim() : '';
-      figmaNode.typography = extractedStyles.typography;
     }
 
     // 6. Map Auto Layout (Flexbox) jika tipenya FRAME/container dan display-nya flex
@@ -126,7 +134,7 @@ export function mapToFigmaTree(domNode) {
     }
 
     // 7. Rekursi memproses child nodes (SVG tidak diproses child-nya karena berupa data string utuh)
-    if (domNode.children && domNode.children.length > 0 && figmaNode.type !== 'VECTOR') {
+    if (domNode.children && domNode.children.length > 0 && figmaNode.type !== 'SVG') {
       for (const child of domNode.children) {
         const mappedChild = mapToFigmaTree(child);
         if (mappedChild) {
