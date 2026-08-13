@@ -8,7 +8,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         popup: resolve(__dirname, 'popup.html'),
-        extractor: resolve(__dirname, 'src/extractor.ts'),
+        content: resolve(__dirname, 'src/content/entry.js'),
       },
       output: {
         entryFileNames: '[name].js',
@@ -19,4 +19,3 @@ export default defineConfig({
   },
   publicDir: 'public',
 });
-
