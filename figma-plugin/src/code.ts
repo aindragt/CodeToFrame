@@ -30,7 +30,62 @@ async function loadFontSafe(fontName: FontName = { family: "Inter", style: "Regu
 }
 
 /**
- * Memetakan nilai properti layout dan padding pada FrameNode.
+ * Memetakan nilai CSS/Flexbox primary alignment ke Figma Enum.
+ *
+ * @param value - Nilai alignment mentah dari JSON.
+ * @returns Enum Figma untuk primaryAxisAlignItems.
+ */
+function mapPrimaryAlign(value: string): 'MIN' | 'CENTER' | 'MAX' | 'SPACE_BETWEEN' {
+  if (!value) return 'MIN';
+  const norm = value.toUpperCase().replace(/-/g, '_').trim();
+  switch (norm) {
+    case 'START':
+    case 'FLEX_START':
+      return 'MIN';
+    case 'END':
+    case 'FLEX_END':
+      return 'MAX';
+    case 'CENTER':
+      return 'CENTER';
+    case 'SPACE_BETWEEN':
+    case 'SPACE_AROUND':
+    case 'SPACE_EVENLY':
+      return 'SPACE_BETWEEN';
+    default:
+      return 'MIN';
+  }
+}
+
+/**
+ * Memetakan nilai CSS/Flexbox counter alignment ke Figma Enum.
+ *
+ * @param value - Nilai alignment mentah dari JSON.
+ * @returns Enum Figma untuk counterAxisAlignItems.
+ */
+function mapCounterAlign(value: string): 'MIN' | 'CENTER' | 'MAX' | 'BASELINE' {
+  if (!value) return 'MIN';
+  const norm = value.toUpperCase().replace(/-/g, '_').trim();
+  switch (norm) {
+    case 'START':
+    case 'FLEX_START':
+      return 'MIN';
+    case 'END':
+    case 'FLEX_END':
+      return 'MAX';
+    case 'CENTER':
+      return 'CENTER';
+    case 'BASELINE':
+      return 'BASELINE';
+    case 'STRETCH':
+      // Krusial: Figma menolak STRETCH untuk counterAxisAlignItems. Fallback aman ke MIN.
+      return 'MIN';
+    default:
+      return 'MIN';
+  }
+}
+
+/**
+ * Memetakan nilai properti layout dan padding pada FrameNode secara defensif.
  *
  * @param node - Objek FrameNode target.
  * @param layout - Konfigurasi layout yang di-ekstrak.
@@ -38,21 +93,27 @@ async function loadFontSafe(fontName: FontName = { family: "Inter", style: "Regu
 function applyLayoutToFrame(node: FrameNode, layout: any): void {
   if (!layout || layout.layoutMode === 'NONE') return;
 
-  node.layoutMode = layout.layoutMode; // 'HORIZONTAL' | 'VERTICAL'
-  node.itemSpacing = layout.itemSpacing || 0;
-  node.paddingTop = layout.paddingTop || 0;
-  node.paddingRight = layout.paddingRight || 0;
-  node.paddingBottom = layout.paddingBottom || 0;
-  node.paddingLeft = layout.paddingLeft || 0;
-  
-  if (layout.primaryAxisAlignItems) {
-    node.primaryAxisAlignItems = layout.primaryAxisAlignItems; // 'MIN' | 'CENTER' | 'MAX' | 'SPACE_BETWEEN'
-  }
-  if (layout.counterAxisAlignItems) {
-    node.counterAxisAlignItems = layout.counterAxisAlignItems; // 'MIN' | 'CENTER' | 'MAX' | 'STRETCH'
-  }
-  if (layout.layoutWrap) {
-    node.layoutWrap = layout.layoutWrap; // 'WRAP' | 'NO_WRAP'
+  try {
+    node.layoutMode = layout.layoutMode; // 'HORIZONTAL' | 'VERTICAL'
+    node.itemSpacing = layout.itemSpacing || 0;
+    node.paddingTop = layout.paddingTop || 0;
+    node.paddingRight = layout.paddingRight || 0;
+    node.paddingBottom = layout.paddingBottom || 0;
+    node.paddingLeft = layout.paddingLeft || 0;
+    
+    if (layout.primaryAxisAlignItems) {
+      node.primaryAxisAlignItems = mapPrimaryAlign(layout.primaryAxisAlignItems);
+    }
+    
+    if (layout.counterAxisAlignItems) {
+      node.counterAxisAlignItems = mapCounterAlign(layout.counterAxisAlignItems);
+    }
+    
+    if (layout.layoutWrap) {
+      node.layoutWrap = layout.layoutWrap; // 'WRAP' | 'NO_WRAP'
+    }
+  } catch (error: any) {
+    console.warn('[CodeToFrame] Gagal menerapkan properti layout secara parsial:', error.message);
   }
 }
 
