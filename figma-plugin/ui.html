@@ -215,9 +215,63 @@
         return;
       }
 
-      // Validasi struktur payload minimal
-      if (!parsedData.elements || !Array.isArray(parsedData.elements)) {
-        updateStatus('Struktur data tidak valid. Objek "elements" tidak ditemukan atau bukan array.', 'error');
+      // === Resilient Parsing / Defensive Consumption ===
+      let normalizedPayload = null;
+
+      // Skenario A: Format Payload Utuh v2.0 dengan rootNode ({ version: "2.0", rootNode: {...} })
+      if (parsedData && parsedData.rootNode && typeof parsedData.rootNode === 'object') {
+        normalizedPayload = parsedData;
+      }
+      // Skenario B: Objek Root Tunggal Langsung ({ tagName: "body", children: [...] })
+      else if (parsedData && parsedData.tagName && !parsedData.elements) {
+        normalizedPayload = {
+          version: '2.0',
+          sourceUrl: parsedData.sourceUrl || '',
+          viewport: parsedData.viewport || { width: 1440, height: 900 },
+          rootNode: parsedData
+        };
+      }
+      // Skenario C: Format Legacy dengan array elements ({ elements: [...] })
+      else if (parsedData && parsedData.elements && Array.isArray(parsedData.elements)) {
+        // Bungkus elemen-elemen legacy ke dalam root frame tunggal
+        normalizedPayload = {
+          version: '2.0',
+          sourceUrl: parsedData.sourceUrl || '',
+          viewport: { width: parsedData.viewportWidth || 1440, height: parsedData.viewportHeight || 900 },
+          rootNode: {
+            type: 'FRAME',
+            name: 'Legacy Root Group',
+            x: 0,
+            y: 0,
+            width: parsedData.viewportWidth || 1440,
+            height: parsedData.viewportHeight || 900,
+            styles: {},
+            children: parsedData.elements
+          }
+        };
+      }
+      // Skenario D: Array Langsung dari node ([ {...}, {...} ])
+      else if (Array.isArray(parsedData)) {
+        normalizedPayload = {
+          version: '2.0',
+          sourceUrl: '',
+          viewport: { width: 1440, height: 900 },
+          rootNode: {
+            type: 'FRAME',
+            name: 'Root Group',
+            x: 0,
+            y: 0,
+            width: 1440,
+            height: 900,
+            styles: {},
+            children: parsedData
+          }
+        };
+      }
+
+      // Validasi Akhir hasil normalisasi
+      if (!normalizedPayload || !normalizedPayload.rootNode) {
+        updateStatus('Struktur data tidak dikenali. Pastikan data disalin dari ekstensi CodeToFrame.', 'error');
         return;
       }
 
@@ -228,7 +282,7 @@
       parent.postMessage({
         pluginMessage: {
           type: 'render-design',
-          payload: parsedData
+          payload: normalizedPayload
         }
       }, '*');
     });
