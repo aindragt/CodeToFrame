@@ -4,9 +4,9 @@
 |---|---|
 | Pemilik | Indra Pramudya |
 | Status | Draft |
-| Versi | 0.1.1 |
+| Versi | 0.1.2 |
 | Tanggal | 2026-10-13 |
-| Dokumen terkait | `docs/PRD.md` v0.4 (acuan utama), `docs/SCHEMA.md` (belum ada) |
+| Dokumen terkait | `docs/PRD.md` v0.5 (acuan utama), `docs/SCHEMA.md` v0.1.1 |
 
 Label yang dipakai:
 - **[PERLU VERIFIKASI]**: fakta platform (Chrome/Figma) yang belum terkonfirmasi dari dokumentasi resmi. Setiap label punya spike di bagian 11.
@@ -53,7 +53,7 @@ flowchart LR
 
   POP -- "perintah & status" --> SW
   SW -- "inject + pesan" --> CS
-  CS -- "pohon node (JSON, chunk)" --> SW
+  CS -- "daftar node: rootId + nodes[] (JSON, chunk)" --> SW
   SW -- "fetch gambar lintas domain" --> Web[(Server gambar)]
   SW <--> IDB
   POP <--> IDB
@@ -68,8 +68,8 @@ flowchart LR
 
 | Komponen | Berjalan di | Hak/izin | Tanggung jawab | TIDAK boleh |
 |---|---|---|---|---|
-| **Content script** (`extension/src/content`) | Tab halaman, di-inject on demand lewat `chrome.scripting.executeScript` | Akses DOM halaman; fetch terikat same-origin halaman | Menunggu/scroll lazy load, menelusuri DOM, filter keterlihatan, mengambil rect dan computed style, mengumpulkan daftar URL gambar, menyerialisasi pohon node | Menulis clipboard; mengambil gambar lintas domain; bicara ke relay; menyimpan data; memetakan ke nilai Figma |
-| **Service worker** (`extension/src/background`) | Proses extension (MV3) | `scripting`, `storage`, `host_permissions: ["<all_urls>"]` | Orkestrasi capture, status progres, fetch dan konversi gambar, merakit amplop data, simpan ke IndexedDB, kirim ke relay, cek status koneksi | Akses DOM; clipboard; menampilkan UI; menerima perintah fetch URL bebas dari content script (hanya URL gambar yang tercatat di pohon node) |
+| **Content script** (`extension/src/content`) | Tab halaman, di-inject on demand lewat `chrome.scripting.executeScript` | Akses DOM halaman; fetch terikat same-origin halaman | Menunggu/scroll lazy load, menelusuri DOM, filter keterlihatan, mengambil rect dan computed style, mengumpulkan daftar URL gambar, menyerialisasi daftar node (`rootId` + `nodes[]`) | Menulis clipboard; mengambil gambar lintas domain; bicara ke relay; menyimpan data; memetakan ke nilai Figma |
+| **Service worker** (`extension/src/background`) | Proses extension (MV3) | `scripting`, `storage`, `host_permissions: ["<all_urls>"]` | Orkestrasi capture, status progres, fetch dan konversi gambar, merakit amplop data, simpan ke IndexedDB, kirim ke relay, cek status koneksi | Akses DOM; clipboard; menampilkan UI; menerima perintah fetch URL bebas dari content script (hanya URL gambar yang tercatat di daftar node) |
 | **Popup** (`extension/src/popup`) | Halaman extension, punya fokus dokumen saat terbuka | Sama dengan origin extension | Tombol Capture, status koneksi (FR-EXT-21), progres (FR-EXT-13), laporan ringkas (FR-EXT-19), Download (FR-EXT-11), Copy (FR-EXT-12), pengaturan token pairing | Menjalankan capture (popup bisa tertutup kapan saja); menyimpan state penting di memorinya sendiri |
 | **Relay lokal** (`relay/`) | Proses Node.js di terminal pengguna | Listen hanya di loopback | Menerima capture dari extension, menyimpan satu capture terakhir di memori, menyajikannya ke plugin, melacak heartbeat plugin | Menyimpan ke disk (kecuali file token); mencatat isi capture di log; menerima koneksi non-loopback; memproses/mengubah isi capture |
 | **UI plugin** (`plugin/src/ui`) | Iframe Figma (`figma.showUI`), punya akses API browser | `networkAccess.devAllowedDomains` ke relay | Polling relay, meminta token pairing ke main thread lewat pesan (karena `figma.clientStorage` diakses dari main thread **[PERLU VERIFIKASI]**, SP-01), upload/drag-drop/tempel (FR-PLG-02), parse + validasi + cek versi, decode gambar, menyuplai batch ke main thread, menampilkan progres dan laporan | Mengakses scene Figma; memetakan CSS ke Figma |
@@ -115,14 +115,14 @@ Opsi A: **relay HTTP lokal (Node.js, tanpa dependensi runtime)**, dengan UI plug
 
 ### 3.4 Protokol relay (sketsa)
 
-Semua endpoint di bawah prefiks `/v1`. Semua endpoint kecuali preflight `OPTIONS` butuh header `Authorization: Bearer <token>` (bagian 3.8). Bentuk body JSON rinci diserahkan ke SCHEMA.
+Semua endpoint di bawah prefiks `/v1`. Semua endpoint kecuali preflight `OPTIONS` butuh header `Authorization: Bearer <token>` (bagian 3.8). Bentuk body rinci ada di SCHEMA bagian 8.
 
 | Endpoint | Pemanggil | Fungsi |
 |---|---|---|
 | `OPTIONS /v1/*` (preflight CORS) | Browser, otomatis | Tidak butuh token karena preflight tidak membawa header `Authorization`. Tetap melewati pemeriksaan `Host` dan `Origin` (3.9); respons hanya berisi header CORS, tanpa data |
-| `GET /v1/status` | Extension | Versi protokol relay, `pluginConnected` (heartbeat), metadata capture yang tertunda (id, judul, waktu) bila ada |
-| `PUT /v1/capture` | Extension | Mengunggah amplop capture; menggantikan slot sebelumnya; mengembalikan `captureId` |
-| `GET /v1/pending?known=<captureId>` | UI plugin, tiap `pollIntervalMs` | Heartbeat plugin + metadata capture terbaru bila berbeda dari `known` |
+| `GET /v1/status` | Extension | Versi protokol relay, `pluginConnected` (heartbeat), metadata slot tanpa isi halaman (id, waktu, ukuran, versi format) dan `lastImport` (hanya jumlah dan kode) bila ada. Tidak memuat judul atau URL (SCHEMA SD-10) |
+| `PUT /v1/capture` | Extension | Mengunggah amplop capture; menggantikan slot sebelumnya. `captureId` dibuat extension (`meta.captureId`, header `X-CTF-Capture-Id`) dan hanya digemakan relay; judul dikirim lewat header `X-CTF-Title` (SCHEMA 8.3) |
+| `GET /v1/pending?known=<captureId>` | UI plugin, tiap `pollIntervalMs` | Heartbeat plugin + metadata capture terbaru bila berbeda dari `known`, termasuk judul (satu-satunya endpoint yang memuat judul) |
 | `GET /v1/capture/<captureId>` | UI plugin | Mengunduh amplop |
 | `POST /v1/capture/<captureId>/ack` | UI plugin | Melaporkan import selesai (ringkasan laporan, tanpa isi halaman); slot dikosongkan |
 
@@ -150,11 +150,11 @@ sequenceDiagram
   P->>SW: startCapture(tabId)
   SW->>CS: executeScript(extractor)
   CS->>CS: tunggu muat, scroll lazy load, telusuri DOM
-  CS-->>SW: progres + pohon node (chunk via port)
+  CS-->>SW: progres + daftar node (chunk via port)
   SW->>SW: fetch + konversi gambar, rakit amplop, laporan ekstraksi
   SW->>SW: simpan amplop ke IndexedDB
-  SW->>R: PUT /v1/capture
-  R-->>SW: captureId
+  SW->>R: PUT /v1/capture (X-CTF-Capture-Id = meta.captureId)
+  R-->>SW: captureId (digemakan)
   SW-->>P: selesai + laporan ringkas (FR-EXT-19)
   UI->>R: GET /v1/pending
   R-->>UI: capture baru (id, judul)
@@ -169,9 +169,11 @@ sequenceDiagram
   M-->>UI: laporan import (FR-PLG-10)
   UI->>R: POST /v1/capture/id/ack (ringkasan)
   SW->>R: GET /v1/status (saat popup masih terbuka)
-  R-->>SW: diimpor
+  R-->>SW: lastImport (jumlah dan kode)
   SW-->>P: "Sudah diimpor ke Figma"
 ```
+
+Setelah `ack`, slot dikosongkan, tetapi relay menyimpan `lastImport` (hanya jumlah dan kode) sampai `PUT` berikutnya atau relay dimatikan. Dari situ popup menampilkan "Sudah diimpor ke Figma" (SCHEMA 8.4).
 
 Popup boleh ditutup kapan saja. Capture tetap berjalan di service worker dan content script, dan status disimpan di `chrome.storage.session`, sehingga progres terlihat lagi saat popup dibuka ulang.
 
@@ -179,10 +181,10 @@ Popup boleh ditutup kapan saja. Capture tetap berjalan di service worker dan con
 
 Opsi dari FR-EXT-10 diputuskan: **ya, relay menyimpan satu capture terakhir di memori.**
 - **Satu slot.** Capture baru menggantikan yang lama. Ini sederhana dan cukup untuk alur satu orang.
-- **Masa hidup.** Slot dikosongkan saat (a) plugin mengirim `ack`, (b) melewati `relaySlotTtlMs`, atau (c) relay dimatikan. Tidak pernah ditulis ke disk.
+- **Masa hidup.** Slot dikosongkan saat (a) plugin mengirim `ack`, (b) melewati `relaySlotTtlMs`, atau (c) relay dimatikan. Tidak pernah ditulis ke disk. Setelah `ack`, relay menyimpan `lastImport` (hanya jumlah dan kode, tanpa isi halaman) sampai `PUT` berikutnya atau relay dimatikan.
 - **Perilaku plugin.**
   - Bila capture baru tiba **saat plugin terbuka**, import berjalan otomatis (memenuhi K1-07).
-  - Bila plugin **baru dibuka dan ada capture tertunda**, plugin menampilkan "Import capture terakhir: {judul}, {waktu}" dan menunggu klik.
+  - Bila plugin **baru dibuka dan ada capture tertunda**, plugin menampilkan "Import capture terakhir: {judul}, {waktu}" dan menunggu klik. Judul berasal dari header `X-CTF-Title` yang dikirim extension saat `PUT` (SCHEMA 8.3, 8.5).
 
   Alasan: import otomatis saat plugin dibuka dapat mengejutkan pengguna yang membuka plugin untuk tujuan lain (mis. upload file), sedangkan urutan "capture dulu, buka plugin kemudian" tetap didukung dengan satu klik tambahan. Ini di luar cakupan K1-07, karena K1-07 mensyaratkan plugin sudah terbuka. Perilaku ini (import otomatis hanya bila plugin sudah terbuka; satu klik bila plugin baru dibuka dan ada capture tertunda) dikonfirmasi oleh pemilik pada 2026-10-13.
 - **Di sisi extension**, amplop terakhir disimpan di IndexedDB extension (satu record, ditimpa tiap capture, dihapus saat `chrome.runtime.onStartup`). Tujuannya agar Download dan Copy tetap tersedia walaupun service worker dihentikan Chrome (idle 30 detik).
@@ -248,11 +250,11 @@ Catatan: Chrome menerapkan pembatasan akses jaringan lokal dari situs publik (Pr
 | C2 | Tunggu muat dan lazy load (FR-EXT-03) | CS | — → halaman siap | Tunggu `loadSettleMs`. Scroll per tinggi viewport dengan jeda `scrollStepDelayMs`, maksimal `maxScrollSteps` langkah dan total `maxWaitMs`. Lalu tunggu `document.fonts.ready` dan gambar yang sedang dimuat (dalam sisa batas waktu). Kembali ke posisi scroll 0. Batas tercapai → peringatan "dipotong pada batas scroll" di laporan, lalu lanjut |
 | C3 | Penelusuran DOM | CS | `document.documentElement` (atau root lain, NFR-08) → daftar elemen terurut | Diproses per `walkBatchSize` elemen lalu yield ke event loop agar tab tidak membeku (NFR-01). Elemen dengan open shadow root: telusuri `shadowRoot` dan `<slot>` lewat `assignedNodes({flatten:true})` (FR-EXT-20, v2). Closed shadow root: hanya host-nya. `iframe`, `canvas`, `video` → node placeholder dengan jenisnya (FR-PLG-16) |
 | C4 | Filter keterlihatan (FR-EXT-05) | CS memanggil `shared/visibility` | rect + style + rect clip induk → simpan / lewati (dengan alasan) | Aturan murni dan teruji unit. Hasil hitung "dilewati" per alasan masuk laporan (FR-EXT-19) |
-| C5 | Pengumpulan gaya dan geometri (FR-EXT-04, -06, -07) | CS | elemen → node mentah (rect koordinat halaman = rect + `scrollX/Y`, subset computed style relevan, teks per text node via `Range.getClientRects`) | `try/catch` per elemen. Elemen gagal → node minimal (rect saja) + peringatan; penelusuran lanjut (NFR-02) |
+| C5 | Pengumpulan gaya dan geometri (FR-EXT-04, -06, -07) | CS | elemen → node mentah (rect koordinat halaman = rect + `scrollX/Y`, subset computed style relevan, teks per segmen dengan run bergaya, rect gabungan via `Range.getClientRects`; SCHEMA 4.4) | `try/catch` per elemen. Elemen gagal → node minimal (rect saja) + peringatan; penelusuran lanjut (NFR-02) |
 | C6 | Normalisasi | CS memanggil `shared/normalize` | node mentah → node ternormalisasi (warna ke RGBA numerik, px numerik, font-family diurai jadi daftar) | Nilai yang tidak bisa diurai disimpan sebagai string asli + peringatan; plugin memakai default aman |
-| C7 | Serialisasi ke SW | CS → SW | pohon node → JSON string dipotong per `messageChunkBytes` lewat port `chrome.runtime.connect` | Port putus → capture gagal dengan pesan jelas. Data parsial tidak dikirim |
-| C8 | Pengambilan gambar (FR-EXT-08/09) | SW | daftar URL unik dari pohon node → aset gambar | Detail di 7.5. Per gambar: gagal/diblokir/terlalu besar → aset bertanda gagal + alasan (R8); capture lanjut |
-| C9 | Perakitan amplop dan laporan ekstraksi | SW | pohon + aset + metadata (FR-EXT-14) → amplop | — |
+| C7 | Serialisasi ke SW | CS → SW | daftar node (`rootId` + `nodes[]`) → JSON string dipotong per `messageChunkBytes` lewat port `chrome.runtime.connect` | Port putus → capture gagal dengan pesan jelas. Data parsial tidak dikirim |
+| C8 | Pengambilan gambar (FR-EXT-08/09) | SW | daftar URL unik dari daftar node → aset gambar | Detail di 7.5. Per gambar: gagal/diblokir/terlalu besar → aset bertanda gagal + alasan (R8); capture lanjut |
+| C9 | Perakitan amplop dan laporan ekstraksi | SW | daftar node + aset + metadata (FR-EXT-14) → amplop. `meta.url` dan `assets[].sourceUrl` ditulis tanpa query dan hash (SCHEMA SD-13) | — |
 | C10 | Simpan dan kirim | SW | amplop → IndexedDB, lalu `PUT` relay | Relay gagal → capture tetap sukses lokal; popup menawarkan Download/Copy |
 
 Catatan geometri v1: capture memakai posisi scroll 0 setelah C2, sehingga elemen `fixed`/`sticky` tercatat di posisi awal halaman. Penanganan akuratnya adalah tugas v3 (FR-EXT-17).
@@ -276,7 +278,7 @@ Transaksi "tanpa node setengah jadi" (FR-PLG-03) berlaku untuk error fatal di R2
 
 | Batas | Nilai | Status | Strategi |
 |---|---|---|---|
-| Pesan `chrome.runtime` | 64 MiB, serialisasi JSON | Terverifikasi (Chrome, Message passing) | Pohon node dipotong per `messageChunkBytes` lewat port. Biner tidak pernah lewat pesan; gambar diambil langsung oleh SW |
+| Pesan `chrome.runtime` | 64 MiB, serialisasi JSON | Terverifikasi (Chrome, Message passing) | Daftar node dipotong per `messageChunkBytes` lewat port. Biner tidak pernah lewat pesan; gambar diambil langsung oleh SW |
 | Fetch di SW | Worker dihentikan bila respons fetch > 30 dtk | Terverifikasi (Chrome, SW lifecycle) | Fetch gambar memakai `imageFetchTimeoutMs` (< 30 dtk). Upload ke relay di loopback diharapkan jauh di bawah batas ini; diukur di SP-03 |
 | Idle SW | 30 dtk tanpa event | Terverifikasi | Selama capture, pesan dari CS dan panggilan API me-reset timer. Amplop disimpan di IndexedDB agar tahan restart SW |
 | Ukuran gambar Figma | PNG/JPEG/GIF, maks. 4096 px per sisi | Terverifikasi (Figma, createImage) | Konversi dan downscale di SW sebelum dikirim (7.5) |
@@ -292,20 +294,20 @@ Transaksi "tanpa node setengah jadi" (FR-PLG-03) berlaku untuk error fatal di R2
 - waktu ekstraksi per tahap;
 - waktu render per tahap;
 - jumlah node;
-- ukuran JSON pohon;
+- ukuran JSON daftar node (`nodesJsonBytes`, SCHEMA 6.1);
 - total byte gambar.
 
 ## 6. Prinsip kontrak data
 
 - **Satu amplop untuk semua jalur (AD-05).** Relay, Download, Copy, dan upload memakai format yang persis sama, termasuk gambar yang tertanam sebagai base64. Akibatnya K1-08 (hasil identik) tercapai secara konstruksi, dan file `.json` mandiri. Konsekuensinya ada overhead base64 sekitar 33%, yang ikut diperhitungkan di `relayMaxBodyBytes`.
 - **Bentuk umum amplop:**
-  - penanda format;
+  - `format` (penanda format, `"codetoframe"`);
   - `formatVersion`;
   - `meta` (FR-EXT-14: URL, judul, lebar viewport, tinggi halaman, waktu capture, plus versi extension, devicePixelRatio, deskripsi root);
-  - `root` (pohon node);
+  - `rootId` + `nodes` (daftar node datar berurutan preorder dengan `parentId`; SCHEMA SD-01);
   - `assets` (gambar, dirujuk dengan id dari node);
   - `report` (laporan ekstraksi FR-EXT-19 + metrik).
-- **Root bebas (NFR-08).** `root` adalah node elemen biasa dengan rect dalam koordinat halaman. Plugin tidak mengasumsikan `root` adalah `body`/`html`; frame akar dibuat seukuran rect root. Untuk v1–v2, root selalu `documentElement` dengan ukuran halaman penuh.
+- **Root bebas (NFR-08).** Node root (`rootId`) adalah node elemen biasa dengan rect dalam koordinat halaman. Plugin tidak mengasumsikan `root` adalah `body`/`html`; frame akar dibuat seukuran rect root. Untuk v1–v2, root selalu `documentElement` dengan ukuran halaman penuh.
 - **Versioning (NFR-07).** `formatVersion` berbentuk `MAJOR.MINOR`.
   - MAJOR berbeda → ditolak dengan pesan yang menyebut versi data dan versi yang didukung.
   - MINOR lebih baru dari yang dikenal plugin → diterima, field tak dikenal diabaikan, peringatan "data dari extension yang lebih baru".
@@ -371,8 +373,8 @@ Transaksi "tanpa node setengah jadi" (FR-PLG-03) berlaku untuk error fatal di R2
 ### 7.5 Gambar lintas domain (FR-EXT-08/09, AD-06)
 
 1. CS mencatat untuk setiap `<img>`: `currentSrc`, ukuran natural, rect, `object-fit`/`object-position`. URL dideduplikasi.
-2. SW mengambil hanya URL yang ada di daftar dari pohon node (bukan URL bebas dari pesan, sesuai anjuran keamanan Chrome). Fetch memakai `credentials: "include"` agar gambar yang membutuhkan sesi ikut termuat **[PERLU VERIFIKASI: pengiriman cookie dari SW dengan host permissions, SP-09]**. Batas waktu `imageFetchTimeoutMs`.
-3. URL `blob:` dan gambar same-origin yang gagal di SW diambil oleh CS (same-origin), lalu dikirim sebagai data URL lewat port yang sama dengan pohon node. `data:` didekode langsung.
+2. SW mengambil hanya URL yang ada di daftar node (bukan URL bebas dari pesan, sesuai anjuran keamanan Chrome). Fetch memakai `credentials: "include"` agar gambar yang membutuhkan sesi ikut termuat **[PERLU VERIFIKASI: pengiriman cookie dari SW dengan host permissions, SP-09]**. Batas waktu `imageFetchTimeoutMs`. Fetch dan deduplikasi di memori memakai URL penuh; hanya nilai `assets[].sourceUrl` yang ditulis ke amplop yang dibersihkan dari query dan hash (SCHEMA SD-13).
+3. URL `blob:` dan gambar same-origin yang gagal di SW diambil oleh CS (same-origin), lalu dikirim sebagai data URL lewat port yang sama dengan daftar node. `data:` didekode langsung.
 4. **Konversi di SW:** format selain PNG/JPEG/GIF (WebP, AVIF, SVG) di-decode lewat `createImageBitmap` lalu di-encode ke PNG dengan `OffscreenCanvas.convertToBlob` **[PERLU VERIFIKASI: dukungan SVG di worker, SP-06]**. Bila gagal, gambar menjadi placeholder dengan alasan "format tidak didukung".
 5. **Downscale:** sisi terpanjang dibatasi `min(4096, imageMaxScaleVsDisplay × ukuran tampil × devicePixelRatio)`. Batas 4096 berasal dari Figma; faktor tampil menghemat data tanpa kehilangan ketajaman yang terlihat.
 6. **Batas:** setelah konversi, gambar > `imageMaxBytes` menjadi gagal ("melebihi batas"). Akumulasi diproses sesuai urutan dokumen; setelah `imageMaxTotalBytes` tercapai, gambar sisanya gagal ("batas total capture").
@@ -417,7 +419,8 @@ CodeToFrame/
 ├─ tsconfig.json           # strict, alias @shared/*
 ├─ scripts/build.mjs       # esbuild: semua target, mode watch, generate manifest
 ├─ shared/src/             # murni: config, types, validate, normalize, visibility,
-│                          #        mapping/, fonts/, naming, autolayout
+│                          #        mapping/, fonts/, naming, autolayout,
+│                          #        schema (konstanta FORMAT_MAJOR/FORMAT_MINOR)
 ├─ extension/
 │  ├─ src/{background,content,popup}/
 │  ├─ manifest.template.json
@@ -434,7 +437,7 @@ CodeToFrame/
 └─ docs/                   # PRD, ARCHITECTURE, SCHEMA, MAPPING, ROADMAP
 ```
 
-`dist/` tidak di-commit. Manifest extension dan plugin dihasilkan dari template, dengan nilai port relay diisi dari `shared/src/config.ts` (AD-11), sehingga port hanya didefinisikan di satu tempat. `devAllowedDomains` plugin diisi `http://localhost:<port>`.
+`FORMAT_MAJOR`/`FORMAT_MINOR` di `shared/src/schema` adalah konstanta format (SCHEMA 7.6), bukan konfigurasi; keduanya tidak masuk tabel bagian 9. `dist/` tidak di-commit. Manifest extension dan plugin dihasilkan dari template, dengan nilai port relay diisi dari `shared/src/config.ts` (AD-11), sehingga port hanya didefinisikan di satu tempat. `devAllowedDomains` plugin diisi `http://localhost:<port>`.
 
 ### 8.3 Skrip standar
 
@@ -459,7 +462,7 @@ Sumber tunggal: `shared/src/config.ts` (konstanta bertipe, diekspor). Manifest d
 |---|---|---|---|
 | `relayPort` | `47821` | Dipilih sembarang di luar port dev umum (3000/5173/8080) dan di bawah rentang ephemeral (49152+). Ganti bila bentrok | Relay, SW, manifest plugin |
 | `relayHosts` | `127.0.0.1`, `::1` | Loopback saja (3.9) | Relay |
-| `relayMaxBodyBytes` | 128 MiB | Gambar maksimal 50 MB × ~1,34 (base64) ≈ 67 MB, ditambah pohon node dengan ruang sisa | Relay |
+| `relayMaxBodyBytes` | 128 MiB | Gambar maksimal 50 MB × ~1,34 (base64) ≈ 67 MB, ditambah daftar node dengan ruang sisa | Relay |
 | `relaySlotTtlMs` | 15 menit | Cukup untuk "capture dulu, buka plugin kemudian", tanpa menahan data sensitif terlalu lama | Relay |
 | `pollIntervalMs` | 1000 | Latensi sekitar 1 dtk tidak terasa untuk alur 1 klik; beban loopback dapat diabaikan | UI plugin |
 | `pluginHeartbeatTimeoutMs` | 3000 | 3× interval polling, toleran terhadap satu-dua poll yang terlambat | Relay |
@@ -479,6 +482,8 @@ Sumber tunggal: `shared/src/config.ts` (konstanta bertipe, diekspor). Manifest d
 | `layoutTolerancePx` | 1 | PRD 9.1 dan keputusan no. 4 (±1 px, dapat dikonfigurasi). Dipakai juga oleh mode verifikasi (10.3) | shared/autolayout, uji |
 | `layerNameTextMaxChars` | 30 | Nama tetap terbaca di panel layer | shared/naming |
 | `placeholderFill` | abu-abu `#D9D9D9`, label `#6B6B6B` | Netral, mudah dibedakan dari konten | Main |
+| `warningSampleNodeIds` | 20 | Cukup untuk menemukan contoh di panel layer Figma sambil membatasi ukuran laporan (SCHEMA K-01) | shared/report |
+| `relayTitleMaxChars` | 120 | Judul terbaca di satu baris; menjaga header `X-CTF-Title` tetap kecil (SCHEMA K-02) **[PERLU VERIFIKASI: batas default `maxHeaderSize` Node, SP-01]** | SW, relay |
 | `maxNodes` | tidak dibatasi | PRD tidak mengunci ambang; nilai ditentukan setelah pengukuran (NFR-01). Disiapkan sebagai kunci agar bisa diaktifkan tanpa perubahan arsitektur | CS |
 
 ## 10. Strategi pengujian
@@ -533,7 +538,7 @@ Spike dijalankan berurutan sebelum implementasi fitur terkait. Setiap spike beru
 
 | # | Spike | Tujuan | Cara membuktikan | Lulus | Gagal → dampak |
 |---|---|---|---|---|---|
-| SP-01 | Jalur transfer langsung (A7, FR-EXT-21, AD-02) | Iframe plugin development di Figma Desktop bisa `fetch` ke `http://localhost:PORT`; SW extension juga | Relay minimal + plugin minimal dengan `devAllowedDomains`. Catat nilai `Origin` iframe, perilaku CORS/preflight dengan header `Authorization`, apakah `figma.clientStorage` hanya dapat diakses dari main thread (alur token 3.8), prompt Local Network Access, IPv4/IPv6. Uji payload 1 KB dan 100 MB | Kedua sisi round-trip sukses tanpa prompt berulang; 100 MB selesai tanpa error | Coba opsi C (UI dimuat dari relay). Bila C juga gagal: transfer langsung tidak layak dan hanya tersisa jalur cadangan, sehingga K1-07 perlu direvisi di PRD |
+| SP-01 | Jalur transfer langsung (A7, FR-EXT-21, AD-02) | Iframe plugin development di Figma Desktop bisa `fetch` ke `http://localhost:PORT`; SW extension juga | Relay minimal + plugin minimal dengan `devAllowedDomains`. Catat nilai `Origin` iframe, perilaku CORS/preflight dengan header `Authorization`, apakah `figma.clientStorage` hanya dapat diakses dari main thread (alur token 3.8), prompt Local Network Access, IPv4/IPv6, batas default `maxHeaderSize` Node untuk header `X-CTF-Title` (`relayTitleMaxChars`). Uji payload 1 KB dan 100 MB | Kedua sisi round-trip sukses tanpa prompt berulang; 100 MB selesai tanpa error | Coba opsi C (UI dimuat dari relay). Bila C juga gagal: transfer langsung tidak layak dan hanya tersisa jalur cadangan, sehingga K1-07 perlu direvisi di PRD |
 | SP-02 | Siklus hidup plugin (A7) | Konfirmasi plugin tidak bisa dijalankan dari luar. Ukur apakah polling iframe tetap berjalan saat tab file Figma lain aktif atau jendela diminimalkan | Plugin polling dengan log timestamp; pindah tab/minimize | Polling tetap ≤ 2× interval | Bila di-throttle: naikkan `pluginHeartbeatTimeoutMs` dan perjelas pesan FR-EXT-21. Arsitektur tetap |
 | SP-03 | Data besar | Ukur pipeline pada halaman sintetis 10 000 / 50 000 node dan 50 MB gambar: chunking CS→SW, upload relay, parse di iframe, pull batch ke main, waktu `createFrame` | Fixture sintetis + metrik NFR-01 | Tab dan Figma tetap responsif (progres bergerak); tidak ada crash memori | Turunkan batas gambar; aktifkan `maxNodes`; pertimbangkan streaming parse. Hasilnya menjadi dasar ambang NFR-01 |
 | SP-04 | Vector dari SVG (A5, v2) | `figma.createNodeFromSvg` (atau API setara) menghasilkan vector yang dapat diedit dari ikon nyata (stroke, `viewBox`, `currentColor`, gradient) | 10 ikon dari pustaka ikon umum + SVG inline halaman acuan | Node vector editable; bounding box sesuai dalam toleransi | Ikon yang gagal dirasterisasi menjadi gambar dan dilaporkan; K2-02 perlu cakupan yang lebih sempit (usulan PRD) |
@@ -599,8 +604,8 @@ Setiap ADR di bawah memuat konteks, opsi, keputusan, alasan, dan konsekuensi di 
 | AD-03 | Satu slot capture terakhir di memori relay (TTL, dikosongkan saat ack); auto-import hanya bila plugin sudah terbuka; amplop terakhir di IndexedDB extension | Antrean banyak capture; simpan ke disk; auto-import saat plugin dibuka | 3.6 |
 | AD-04 | Keamanan relay: loopback, token bearer, cek Host, allowlist Origin, batas body, memori saja, tanpa log isi | Tanpa token (mengandalkan Origin saja); autostart sebagai service OS | 3.9 |
 | AD-05 | Satu amplop untuk semua jalur, gambar tertanam base64 | Gambar terpisah dari JSON (berarti file cadangan tidak mandiri) | 6 |
-| AD-06 | Gambar diambil di SW dari daftar URL pohon node; konversi ke PNG dan downscale di SW; fallback CS untuk `blob:`/same-origin | Rasterisasi lewat canvas di content script (canvas tercemar lintas domain) | 7.5 |
-| AD-07 | Render dengan pola pull batch: main meminta batch ke UI | Kirim seluruh pohon sekaligus ke main (memori dan freeze) | 4.2, 5 |
+| AD-06 | Gambar diambil di SW dari daftar URL di daftar node; konversi ke PNG dan downscale di SW; fallback CS untuk `blob:`/same-origin | Rasterisasi lewat canvas di content script (canvas tercemar lintas domain) | 7.5 |
+| AD-07 | Render dengan pola pull batch: main meminta batch ke UI | Kirim seluruh daftar node sekaligus ke main (memori dan freeze) | 4.2, 5 |
 | AD-08 | Pemetaan CSS → Figma murni di `shared/mapping`, keluaran bertipe enum Figma, default + peringatan | Pemetaan tersebar di kode render (penyebab crash versi lama) | 7.1 |
 | AD-09 | Verifikasi Auto Layout dua lapis: simulasi murni + baca-balik di Figma | Hanya simulasi; hanya heuristik CSS tanpa verifikasi | 7.6 |
 | AD-10 | TypeScript strict, esbuild + satu skrip build, npm satu `package.json`, Vitest + Playwright, nol dependensi runtime | Vite (+CRXJS/plugin single-file), workspaces, Jest, jsdom | 8.1 |
@@ -624,7 +629,7 @@ Usulan berikut diterima pemilik dan sudah diterapkan di PRD v0.4 (PRD 11.1 no. 1
 
 ### 13.3 Diserahkan ke SCHEMA.md
 
-Daftar lengkap ada di bagian 6, "Yang harus diputuskan SCHEMA.md". Ringkasnya:
+Daftar lengkap ada di bagian 6, "Yang harus diputuskan SCHEMA.md". **Status: sudah ditangani di SCHEMA v0.1.1** (field: bagian 3–6; representasi teks: SD-02 dan 4.4; kode peringatan: 6.4; `formatVersion` dan aturan versi: SD-06 dan 7.6; body relay: bagian 8; sumber kebenaran: SD-12). Ringkasnya:
 - field amplop, `meta`, node, aset, laporan;
 - representasi teks (run bergaya);
 - kode peringatan yang stabil;
@@ -640,3 +645,4 @@ Daftar lengkap ada di bagian 6, "Yang harus diputuskan SCHEMA.md". Ringkasnya:
 |---|---|---|
 | 0.1 | 2026-10-13 | Draf awal. |
 | 0.1.1 | 2026-10-13 | Menerapkan keputusan P-01 sampai P-07, preflight CORS, catatan token plugin dan izin host. |
+| 0.1.2 | 2026-10-13 | Menyesuaikan dengan SCHEMA (U-01 sampai U-06), konfigurasi K-01/K-02, privasi URL. |

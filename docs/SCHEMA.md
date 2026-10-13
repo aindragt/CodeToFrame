@@ -4,15 +4,15 @@
 |---|---|
 | Pemilik | Indra Pramudya |
 | Status | Draft |
-| Versi | 0.1 |
+| Versi | 0.1.1 |
 | Tanggal | 2026-10-13 |
-| Dokumen terkait | `docs/PRD.md` v0.4, `docs/ARCHITECTURE.md` v0.1.1 |
+| Dokumen terkait | `docs/PRD.md` v0.5, `docs/ARCHITECTURE.md` v0.1.2 |
 
 Label yang dipakai:
 - **SD-xx**: keputusan SCHEMA (ringkasan di bagian 11.1). Prefiks AD milik ARCHITECTURE.
 - **[ASUMSI]**: keputusan sementara yang belum dikonfirmasi pemilik.
 - **[PERLU VERIFIKASI]**: fakta platform yang belum terkonfirmasi.
-- **PQ-xx**: pertanyaan terbuka untuk pemilik (bagian 11.2).
+- **PQ-xx**: pertanyaan untuk pemilik; semuanya sudah diputuskan (bagian 11.2).
 
 ---
 
@@ -68,7 +68,7 @@ Dokumen ini hanya menetapkan **apa** yang dicatat, bukan **bagaimana** dirender.
 - **Satuan:** semua panjang dalam CSS px (bukan device px). `meta.devicePixelRatio` dicatat terpisah.
 - **Koordinat halaman:**
   - Titik asal (0, 0) adalah sudut kiri atas dokumen. Sumbu x ke kanan, sumbu y ke bawah.
-  - `rect` = `getBoundingClientRect()` + (`scrollX`, `scrollY`) pada saat elemen diukur (ARCHITECTURE 4.1 C5). Hasilnya sama untuk semua node, tidak bergantung posisi scroll.
+  - `rect` = `getBoundingClientRect()` + (`scrollX`, `scrollY`) pada saat elemen diukur (ARCHITECTURE 4.1 C5). Hasilnya sama untuk semua node, tidak bergantung posisi scroll. Pengecualian: rect node root mengikuti aturan rect root (3.2).
   - Rect adalah border-box. Posisi relatif terhadap induk dihitung oleh plugin.
 - **Pembulatan:**
   - px dan kanal warna r, g, b dibulatkan ke 2 desimal;
@@ -111,7 +111,7 @@ Dokumen ini hanya menetapkan **apa** yang dicatat, bukan **bagaimana** dirender.
 - **Alasan.** Opsi B cocok langsung dengan C7, R2, R5, dan uji snapshot. Kekurangannya hanya keterbacaan, yang tertolong oleh urutan preorder.
 - **Konsekuensi.**
   - Validator perlu memeriksa rujukan `parentId`, siklus, dan urutan (7.5).
-  - Teks ARCHITECTURE yang menyebut "pohon node" perlu disesuaikan (usulan U-01).
+  - Teks ARCHITECTURE yang menyebut "pohon node" sudah disesuaikan (U-01, diterapkan di ARCHITECTURE v0.1.2).
   - Perubahan dari datar ke bersarang di masa depan adalah perubahan MAJOR.
   - `zIndex` dan `position` dicatat sebagai fakta (5.3), sehingga pengurutan cat yang lebih akurat dapat ditambahkan nanti tanpa capture ulang.
 
@@ -121,7 +121,7 @@ Dokumen ini hanya menetapkan **apa** yang dicatat, bukan **bagaimana** dirender.
 - **Opsi.**
   - **A. Satu node teks per DOM text node.** Ekstraksinya paling sederhana. Kekurangannya: `<p>Halo <b>dunia</b> lagi</p>` menjadi 3 layer teks. Bila sebuah baris dibungkus di tengah run, teksnya tidak dapat direproduksi oleh kotak-kotak terpisah, sehingga hasil di Figma berantakan.
   - **B. Satu node teks per segmen** (rangkaian teks inline yang bersambung) dengan `runs[]` bergaya. Hasilnya satu layer teks yang dapat diedit, dan Figma mendukung gaya per rentang karakter. Ekstraksinya lebih rumit: perlu mengelompokkan teks dan menghitung rect gabungan dengan `Range.getClientRects`.
-- **Keputusan.** Opsi B. Format **selalu** memakai `runs[]` (minimal 1 run). Aturan pengelompokan v1 dijelaskan di 4.4. Elemen inline "polos" (tanpa kotak visual sendiri) diserap menjadi run dan tidak menjadi node elemen **[ASUMSI]**; dampaknya pada K1-06 ditanyakan di PQ-03.
+- **Keputusan.** Opsi B. Format **selalu** memakai `runs[]` (minimal 1 run). Aturan pengelompokan v1 dijelaskan di 4.4. Elemen inline "polos" (tanpa kotak visual sendiri) diserap menjadi run dan tidak menjadi node elemen, sesuai keputusan PRD v0.5 (11.1 no. 23). **Dikonfirmasi pemilik (2026-10-13).**
 - **Alasan.**
   - K1-01 dan K1-05 tetap sederhana (1 run).
   - Hasil di Figma rapi (G2).
@@ -130,7 +130,7 @@ Dokumen ini hanya menetapkan **apa** yang dicatat, bukan **bagaimana** dirender.
   - Mengubah aturan pengelompokan (mis. kembali ke opsi A untuk kasus tertentu) tidak menaikkan versi, karena bentuk datanya sama.
   - Menambah field gaya run menaikkan MINOR.
   - Mengganti `runs` dengan struktur lain menaikkan MAJOR.
-  - Usulan U-02 menyesuaikan kata "per text node" di ARCHITECTURE C5.
+  - Kata "per text node" di ARCHITECTURE C5 sudah disesuaikan (U-02, diterapkan di ARCHITECTURE v0.1.2).
 
 ### SD-03 Identitas node dan aset
 
@@ -200,7 +200,7 @@ Field tak dikenal di objek akar diabaikan (7.4).
 | Field | Tipe | Wajib | Versi | Deskripsi | Rujukan |
 |---|---|---|---|---|---|
 | `captureId` | `string` | W | [v1] | UUID v4 dari extension. Sama dengan header `X-CTF-Capture-Id` di relay (8.3) | SD-03 |
-| `url` | `string` | W | [v1] | URL halaman **setelah kebijakan privasi URL diterapkan** (PQ-01). Validator hanya memeriksa tipenya | FR-EXT-14 |
+| `url` | `string` | W | [v1] | URL halaman tanpa query string, hash, dan userinfo (SD-13). Validator hanya memeriksa tipenya | FR-EXT-14, NFR-03 |
 | `title` | `string` | W | [v1] | `document.title`, boleh `""` | FR-EXT-14 |
 | `capturedAt` | `string` | W | [v1] | ISO 8601 UTC dengan milidetik, mis. `"2026-10-13T08:15:30.123Z"` | FR-EXT-14 |
 | `viewport` | `{ width: Px≥0, height: Px≥0 }` | W | [v1] | Lebar dan tinggi area layout viewport (`documentElement.clientWidth/clientHeight`, tanpa scrollbar) **[ASUMSI]** | FR-EXT-02, -14 |
@@ -218,6 +218,8 @@ Field tak dikenal di objek akar diabaikan (7.4).
 | `scope` | `enum(document, element)` | W | [v1] | v1–v2 selalu `document` (root = `documentElement`). `element` disiapkan untuk partial capture (PRD 5.4) |
 | `tag` | `string` | W | [v1] | Tag elemen root (huruf kecil), mis. `"html"` |
 | `selector` | `string` | O | [v3+] | Ruang ekstensi untuk partial capture |
+
+**Rect root.** Untuk `scope = "document"`, `rect` node root = `{ x: 0, y: 0, w: page.width, h: page.height }` (ukuran halaman penuh, ARCHITECTURE bagian 6), bukan `getBoundingClientRect()` mentah dari `html`. Untuk `scope = "element"` (partial capture di masa depan), `rect` = border-box elemen tersebut dalam koordinat halaman.
 
 ---
 
@@ -237,7 +239,7 @@ Field tak dikenal di objek akar diabaikan (7.4).
 | `fallback` | `bool` | O | [v1] | `true` = node minimal hasil kegagalan ekstraksi per elemen (C5): hanya `id`, `kind: "element"`, `parentId`, `tag`, `rect`. Disertai `EXT_NODE_FAILED` | NFR-02 |
 | `inShadowTree` | `bool` | O | [v2] | `true` bila node berasal dari open shadow root | FR-EXT-20 |
 
-Root (`id == rootId`) harus berjenis `element` dan tidak punya `parentId`. Bila `parentId` tetap ada di root, field itu diabaikan dan dicatat `VAL_ROOT_HAS_PARENT`.
+Root (`id == rootId`) harus berjenis `element` dan tidak punya `parentId`. `rect` root mengikuti aturan rect root di 3.2: halaman penuh untuk `scope = "document"`, border-box elemen untuk `scope = "element"`. Bila `parentId` tetap ada di root, field itu diabaikan dan dicatat `VAL_ROOT_HAS_PARENT`.
 
 ### 4.2 `kind: "element"`
 
@@ -258,7 +260,7 @@ Kasus khusus di v1:
 | `display` | `string` | O | [v1] | Computed `display` apa adanya (informasi; tidak di-enum karena variasinya banyak) | FR-EXT-16 (v2) |
 | `position` | `enum(static, relative, absolute, fixed, sticky)` | O | [v1] | Fakta. Penanganan fixed/sticky di v3 | FR-EXT-17 |
 | `zIndex` | `int` atau `"auto"` | O | [v1] | Fakta untuk urutan cat di masa depan (SD-01) | — |
-| `visibility` | `enum(visible, hidden, collapse)` | O | [v1] | `hidden` hanya muncul pada elemen yang dipertahankan karena punya keturunan terlihat (PQ-02) | FR-EXT-05 |
+| `visibility` | `enum(visible, hidden, collapse)` | O | [v1] | `hidden`/`collapse` hanya muncul pada elemen yang dipertahankan karena punya keturunan terlihat (SD-14); kotaknya tidak digambar | FR-EXT-05 |
 | `opacity` | `number` (0–1) | O | [v1] | Computed `opacity` | 5.1, K1-02 |
 | `overflowX` | `enum(visible, hidden, clip, scroll, auto)` | O | [v1] | — | K1-03 |
 | `overflowY` | `enum(visible, hidden, clip, scroll, auto)` | O | [v1] | — | K1-03 |
@@ -309,7 +311,7 @@ Node teks tidak punya anak dan tidak punya `style`.
 1. **Inline polos** adalah elemen dengan computed `display: inline` yang **tidak** menggambar kotak sendiri: `backgroundColor` transparan, tanpa border, tanpa `boxShadow`, `opacity` 1. Selain itu elemen tersebut bukan `img`, `svg`, `iframe`, `canvas`, `video`, atau elemen yang menjadi placeholder.
 2. Untuk setiap elemen yang dicatat (E), anak-anak DOM E dibagi menjadi **segmen**. Segmen adalah rangkaian maksimal anak yang bersambung, terdiri dari text node dan inline polos (rekursif: isi inline polos juga harus text node, inline polos, atau `<br>`).
 3. Setiap segmen yang berisi karakter non-whitespace setelah collapse menjadi **satu node `text`** dengan `parentId` = E dan `tag` = tag E. Segmen yang hanya berisi whitespace dibuang.
-4. Elemen inline polos di dalam segmen **tidak** menjadi node; gayanya menjadi run (PQ-03).
+4. Elemen inline polos di dalam segmen **tidak** menjadi node; gayanya menjadi run (PRD v0.5 11.1 no. 23).
 5. Anak yang bukan bagian segmen (block, inline-block, inline bergaya kotak, img, dan seterusnya) menjadi node biasa sesuai urutan. Segmen dan node anak lain tetap berurutan sesuai DOM.
 6. **Run:** karakter yang bersebelahan dengan gaya efektif yang sama digabung menjadi satu run.
 7. **Teks** ditulis sesuai yang dirender:
@@ -417,7 +419,7 @@ Elemen yang dilewati (SD-07) **tidak menjadi node**. Jumlahnya dicatat per alasa
 | Kode alasan | Kondisi | Dihitung di laporan |
 |---|---|---|
 | `SKIP_DISPLAY_NONE` | `display: none` | Ya |
-| `SKIP_VISIBILITY_HIDDEN` | `visibility: hidden/collapse` tanpa keturunan yang terlihat (PQ-02) | Ya |
+| `SKIP_VISIBILITY_HIDDEN` | `visibility: hidden/collapse` tanpa keturunan yang terlihat. Bila punya keturunan terlihat, elemen tetap dicatat (SD-14) | Ya |
 | `SKIP_ZERO_SIZE` | `w == 0` atau `h == 0` tanpa keturunan yang terlihat | Ya |
 | `SKIP_OUTSIDE_PAGE` | Rect sepenuhnya di luar `[0, page.width] × [0, page.height]` (A6 a) | Ya (FR-EXT-19) |
 | `SKIP_CLIPPED_BY_ANCESTOR` | Rect sepenuhnya di luar rect clip leluhur dengan overflow ≠ `visible` (A6 b) | Ya (FR-EXT-19) |
@@ -437,13 +439,25 @@ Elemen yang dilewati (SD-07) **tidak menjadi node**. Jumlahnya dicatat per alasa
   - Daftar bisa sangat besar (menu off-canvas, ribuan elemen tersembunyi) dan memuat isi halaman.
 - **Konsekuensi.** Untuk diagnosis, sampel bisa ditambahkan nanti sebagai field opsional (`skippedSamples`), dan itu perubahan MINOR.
 
+### SD-14 Induk `visibility: hidden` dengan keturunan terlihat
+
+- **Konteks.** CSS mengizinkan anak bergaya `visibility: visible` tampil di bawah induk `visibility: hidden`. FR-EXT-05 menyatakan elemen tidak terlihat tidak diekspor.
+- **Opsi.**
+  - (a) Induk tetap dicatat dengan `style.visibility: "hidden"`.
+  - (b) Induk dilewati dan anak ditempel ke leluhur.
+- **Keputusan.** (a), diputuskan pemilik pada 2026-10-13 (PQ-02; PRD v0.5 11.1 no. 25).
+  - Elemen `visibility: hidden`/`collapse` yang punya keturunan terlihat dicatat dengan `style.visibility` bernilai aslinya; kotaknya tidak digambar oleh plugin.
+  - Elemen tersebut dilewati (`SKIP_VISIBILITY_HIDDEN`) hanya bila tidak punya keturunan terlihat.
+- **Alasan.** Hierarki K1-06 tetap terjaga.
+- **Konsekuensi.** Tidak ada field baru. Plugin harus menghormati `style.visibility` (tidak menggambar fill, border, dan shadow node tersebut, tetapi tetap membuat anaknya).
+
 ---
 
 ## 5. Aset gambar
 
 ### SD-08 Aset dideduplikasi per URL, base64 standar, MIME terbatas
 
-- Satu entri `assets[]` per URL sumber unik. Banyak node image boleh merujuk satu aset.
+- Satu entri `assets[]` per URL sumber unik (URL penuh, sebelum dibersihkan; SD-13). Banyak node image boleh merujuk satu aset.
 - `data` memakai base64 standar RFC 4648: alfabet `+/`, dengan padding `=`, tanpa prefiks `data:` dan tanpa baris baru.
 - `mime` hanya `image/png`, `image/jpeg`, atau `image/gif`, karena format lain sudah dikonversi oleh service worker (ARCHITECTURE 7.5). Dengan begitu plugin bisa langsung memanggil `figma.createImage`.
 
@@ -453,7 +467,7 @@ Elemen yang dilewati (SD-07) **tidak menjadi node**. Jumlahnya dicatat per alasa
 |---|---|---|---|---|---|
 | `id` | `Id` | W | [v1] | Unik di `assets[]` | SD-03 |
 | `status` | `enum(ok, failed)` | W | [v1] | — | FR-EXT-09 |
-| `sourceUrl` | `string` | O | [v1] | URL sumber **setelah kebijakan privasi URL diterapkan** (PQ-01). Untuk `data:` hanya ditulis `"data:<mime>"`; untuk `blob:` hanya `"blob:"` | ARCHITECTURE 7.5 |
+| `sourceUrl` | `string` | O | [v1] | URL sumber tanpa query string, hash, dan userinfo (SD-13). Tidak dijamin unik antar aset. Untuk `data:` hanya ditulis `"data:<mime>"`; untuk `blob:` hanya `"blob:"` | ARCHITECTURE 7.5 |
 | `sourceMime` | `string` | O | [v1] | MIME asli sebelum konversi (mis. `image/webp`, `image/svg+xml`) | P-07, SP-06 |
 | `mime` | `enum(image/png, image/jpeg, image/gif)` | W\* | [v1] | Wajib bila `status: ok` | ARCHITECTURE 5 |
 | `width` | `int` (1–4096) | W\* | [v1] | Lebar data terenkode (setelah downscale). Wajib bila `ok` | ARCHITECTURE 7.5 |
@@ -479,6 +493,22 @@ Elemen yang dilewati (SD-07) **tidak menjadi node**. Jumlahnya dicatat per alasa
 
 Kode baru boleh ditambahkan dengan menaikkan MINOR. Plugin yang menerima kode tak dikenal memperlakukannya sebagai `IMG_OTHER` (7.4).
 
+### SD-13 URL disimpan tanpa query, hash, dan userinfo
+
+- **Konteks.** `meta.url` dan `assets[].sourceUrl` bisa memuat token di query atau hash (halaman di balik login, URL gambar bertanda tangan). Amplop tersimpan di file `.json`, clipboard, dan relay.
+- **Opsi.**
+  - (1) Simpan utuh.
+  - (2) Buang query dan hash.
+  - (3) Simpan hanya origin + path.
+- **Keputusan.** (2), diputuskan pemilik pada 2026-10-13 (PQ-01). Berlaku untuk `meta.url` dan `assets[].sourceUrl`.
+  - Bagian userinfo URL (`user:pass@`) juga dibuang **[ASUMSI]**.
+  - Aturan `data:` (hanya `"data:<mime>"`) dan `blob:` (hanya `"blob:"`) di 5.1 tetap berlaku.
+- **Alasan.** Token umum tidak ikut tersimpan, sementara origin dan path tetap tersedia untuk diagnosis.
+- **Konsekuensi.**
+  - Pengambilan gambar oleh service worker dan deduplikasi aset di memori tetap memakai URL penuh. Hanya nilai yang ditulis ke amplop yang dibersihkan.
+  - Akibatnya, dua aset bisa memiliki `sourceUrl` yang sama (mis. URL yang hanya berbeda query). Plugin tidak boleh mendeduplikasi berdasarkan `sourceUrl`; rujukan selalu lewat `assetId`.
+  - Format tidak berubah (tetap `string`), sehingga mengubah kebijakan ini nanti tidak menaikkan versi.
+
 ---
 
 ## 6. Laporan dan peringatan
@@ -486,7 +516,7 @@ Kode baru boleh ditambahkan dengan menaikkan MINOR. Plugin yang menerima kode ta
 ### SD-09 Peringatan berkode, berparameter, dan diagregasi
 
 - Data hanya memuat `code` dan `params`. **Pesan manusia tidak masuk data.** Teks pesan disimpan di katalog `shared/messages` dan dapat diubah tanpa menaikkan versi.
-- Peringatan dengan `code` dan `params` yang sama digabung menjadi satu entri berisi `count` dan sampel `nodeIds`. Jumlah sampel dibatasi oleh `warningSampleNodeIds` (usulan konfigurasi K-01). Tujuannya agar laporan tidak membengkak, misalnya 5.000 peringatan identik untuk satu nilai CSS yang sama.
+- Peringatan dengan `code` dan `params` yang sama digabung menjadi satu entri berisi `count` dan sampel `nodeIds`. Jumlah sampel dibatasi oleh `warningSampleNodeIds` (K-01, ARCHITECTURE bagian 9). Tujuannya agar laporan tidak membengkak, misalnya 5.000 peringatan identik untuk satu nilai CSS yang sama.
 
 `Warning`:
 
@@ -534,7 +564,7 @@ Tipe bersama di `shared/types`. Dipakai oleh main → UI untuk tampilan (FR-PLG-
 | `captureId` | `string` | W | Dari `meta.captureId`, atau `""` bila tidak ada | — |
 | `outcome` | `enum(imported, incomplete, rejected)` | W | `incomplete` = error di tengah render (P-05); `rejected` = fatal di validasi | FR-PLG-03 |
 | `fatal` | `{ code: string, params?: {…} }` | W\* | Wajib bila `rejected` | 7.1 |
-| `nodesCreated` | `int` | W | — | FR-PLG-10 |
+| `nodesCreated` | `int` | W | Jumlah node Figma yang berhasil dibuat dari node amplop, termasuk placeholder. Node yang dilewati karena validasi atau kegagalan tidak dihitung | FR-PLG-10 |
 | `fontSubstitutions` | `{ from: string, to: string, tier: enum(name, manual, category, fallback), textNodes: int }[]` | W | `from` = keluarga asli, `to` = keluarga Figma yang dipakai | FR-PLG-05, -10, K1-05 |
 | `placeholders` | `{ images: int, unsupported: int }` | W | — | FR-PLG-09, -16 |
 | `warnings` | `Warning[]` | W | Kategori `val` dan `rnd` | FR-PLG-10 |
@@ -743,6 +773,7 @@ Setiap butir = minimal satu kasus uji. Butir bertanda K1-10 wajib ada di fixture
 | VC-26 | 10.000 node dengan nilai enum asing yang sama | Satu entri peringatan, `count: 10000`, `nodeIds` ≤ K-01 |
 | VC-27 | Anak di bawah node `image` | `VAL_CHILDREN_REPARENTED` |
 | VC-28 | Amplop sah hasil extractor (snapshot fixture) | Lolos tanpa peringatan `val` |
+| VC-29 | **Uji extractor/snapshot, bukan validator.** Fixture dengan `root.scope = "document"` | `rect` root = `{ x: 0, y: 0, w: meta.page.width, h: meta.page.height }` (3.2) |
 
 ---
 
@@ -761,7 +792,7 @@ Setiap butir = minimal satu kasus uji. Butir bertanda K1-10 wajib ada di fixture
   - `GET /v1/status` (dibaca extension) **tidak** memuat judul.
   - `GET /v1/pending` (dibaca plugin, yang toh akan menerima seluruh capture) memuat judul.
 - **Alasan.** Relay tetap "bodoh" dan tidak perlu mem-parse JSON besar. Judul tidak mengalir ke endpoint yang tidak membutuhkannya.
-- **Konsekuensi.** ARCHITECTURE 3.4 menyebut judul pada respons status; ini perlu disesuaikan (U-03).
+- **Konsekuensi.** ARCHITECTURE 3.4 sudah disesuaikan: respons status tidak memuat judul (U-03, diterapkan di ARCHITECTURE v0.1.2).
 
 ### 8.1 Konvensi umum
 
@@ -803,7 +834,7 @@ Header request:
 | `X-CTF-Capture-Id` | W | `meta.captureId` (UUID v4) |
 | `X-CTF-Format-Version` | W | `formatVersion` amplop |
 | `X-CTF-Captured-At` | W | `meta.capturedAt` |
-| `X-CTF-Title` | O | `meta.title` di-encode `encodeURIComponent`, dipotong ke `relayTitleMaxChars` karakter **sebelum** di-encode (usulan K-02) |
+| `X-CTF-Title` | O | `meta.title` di-encode `encodeURIComponent`, dipotong ke `relayTitleMaxChars` karakter **sebelum** di-encode (K-02, ARCHITECTURE bagian 9) |
 
 - Body: amplop utuh (byte UTF-8). Relay **tidak** mem-parse body.
 - Respons `200`:
@@ -934,6 +965,7 @@ Catatan:
 - `fontSize: 16` dan `opacity: 1` dihilangkan karena sama dengan nilai awal (SD-05).
 - Elemen `head` dan turunannya tidak dihitung (`SKIP_NON_RENDERED`).
 - Nama layer yang dihasilkan plugin: `button.btn` dan `button "Klik"`.
+- Rect `n0` = `{ x: 0, y: 0, w: 1280, h: 720 }` = `{0, 0, page.width, page.height}`, sesuai aturan rect root (3.2), bukan `getBoundingClientRect()` mentah dari `html`.
 
 ### 9.2 (b) Gambar berhasil dan gambar gagal (K1-04)
 
@@ -1007,7 +1039,7 @@ Catatan: sampel `nodeIds` di entri `svg-inline` dipotong dua demi ringkas.
 {
   "captureId": "7f9c2b1e-5d4a-4c3b-9e8f-1a2b3c4d5e6f",
   "outcome": "imported",
-  "nodesCreated": 2450,
+  "nodesCreated": 2455,
   "fontSubstitutions": [
     { "from": "Brand Sans", "to": "Inter", "tier": "category", "textNodes": 22 }
   ],
@@ -1027,7 +1059,7 @@ Body `ack` yang dikirim ke relay (tanpa nama font atau id node):
 
 ```json
 {
-  "outcome": "imported", "nodesCreated": 2450, "fontSubstitutions": 1, "placeholders": 5,
+  "outcome": "imported", "nodesCreated": 2455, "fontSubstitutions": 1, "placeholders": 5,
   "warningCounts": { "RND_FONT_SUBSTITUTED": 22, "RND_IMAGE_PLACEHOLDER": 2, "RND_VALUE_DEFAULTED": 6, "VAL_ENUM_UNKNOWN": 2 },
   "durationMs": 4670
 }
@@ -1079,14 +1111,14 @@ Body `ack` yang dikirim ke relay (tanpa nama font atau id node):
 | FR-PLG-15 (progres) | Tidak ada di data (status UI). `ImportReport.metrics` hanya untuk ukuran |
 | NFR-01 (metrik) | 6.1 `metrics`, 6.2 `metrics` |
 | NFR-02 (ketahanan) | 4.1 `fallback`, 7.2–7.5 |
-| NFR-03 (privasi) | 8 (status/ack tanpa isi), SD-10, PQ-01 |
+| NFR-03 (privasi) | 8 (status/ack tanpa isi), SD-10, SD-13 (URL tanpa query dan hash) |
 | NFR-07 (versi) | 3.1, SD-06, 7.1, 7.6 |
 | NFR-08 (root bebas) | 3.1 `rootId`, 3.2 `root`, SD-01 |
 | K1-01 | 9.1 |
 | K1-02, K1-03 | 4.3 `opacity`, `border`, `boxShadow`, `overflowX/Y` |
 | K1-04 | 5, 9.2 |
 | K1-05 | 4.4, 6.2 |
-| K1-06 | SD-01, 4.4 (PQ-03) |
+| K1-06 | SD-01, 4.4, SD-14 (PRD v0.5 11.1 no. 23) |
 | K1-08 | 3 (satu amplop) |
 | K1-09 | 7.3, 7.4, `VAL_ENUM_UNKNOWN`, `RND_VALUE_DEFAULTED` |
 | K1-10 | 7.1–7.7, 9.4 |
@@ -1112,34 +1144,47 @@ Body `ack` yang dikirim ke relay (tanpa nama font atau id node):
 | SD-09 | Peringatan = kode + params, diagregasi dengan sampel; pesan di luar data | Pesan teks di data; satu entri per kejadian | Kode baru tanpa versi |
 | SD-10 | Body relay opaque; metadata lewat header; judul hanya di `/pending` | Relay mem-parse amplop | Protokol `/v1` |
 | SD-11 | Fakta teks/posisi tambahan dicatat sejak v1 | Hanya properti yang dirender v1 | — |
+| SD-13 | URL (`meta.url`, `assets[].sourceUrl`) disimpan tanpa query, hash, dan userinfo; fetch dan deduplikasi tetap memakai URL penuh | Simpan utuh; hanya origin + path | Ubah kebijakan tanpa versi |
+| SD-14 | Induk `visibility: hidden` dengan keturunan terlihat tetap dicatat; dilewati hanya bila tanpa keturunan terlihat | Lewati induk, tempel anak ke leluhur | — |
 | SD-12 | Sumber kebenaran: tabel dokumen ini → tipe TS + validator tulisan tangan di `shared` (nol dependensi runtime, AD-10). JSON Schema boleh dihasilkan kemudian untuk dokumentasi | JSON Schema + pustaka validator runtime | — |
 
 ### 11.2 Pertanyaan terbuka
 
-| # | Pertanyaan | Opsi dan dampak |
-|---|---|---|
-| PQ-01 | **Privasi URL.** `meta.url` dan `assets[].sourceUrl` bisa memuat token di query/hash (halaman di balik login, URL gambar bertanda tangan). Apa yang disimpan? | (1) **Simpan utuh**: diagnostik paling lengkap; token ikut tersimpan di file `.json`, clipboard, dan relay. (2) **Buang query dan hash**: token umum hilang; URL gambar yang hanya dibedakan query (mis. `?w=200` vs `?w=400`) tidak bisa dibedakan saat diagnosis, tetapi deduplikasi tetap memakai URL penuh di memori. (3) **Hanya origin + path**: sama dengan (2) ditambah pemotongan fragment path; paling aman, diagnostik paling sedikit. Pilihan apa pun tidak mengubah format (tetap `string`) |
-| PQ-02 | **`visibility: hidden` dengan keturunan terlihat.** CSS mengizinkan anak bergaya `visibility: visible` tampil di bawah induk yang tersembunyi. FR-EXT-05 menyatakan elemen tidak terlihat tidak diekspor | Usulan **[ASUMSI]**: induk tetap dicatat dengan `style.visibility: "hidden"` (kotaknya tidak digambar) agar hierarki K1-06 terjaga; hanya dilewati bila tidak punya keturunan terlihat. Alternatif: lewati induk dan tempel anak ke leluhur |
-| PQ-03 | **Inline polos dan K1-06.** SD-02 menyerap `<b>`, `<a>`, `<span>` tanpa kotak visual menjadi run, sehingga elemen tersebut tidak menjadi layer | Apakah K1-06 ("hierarki sama dengan nesting elemen terlihat") dibaca sebagai "elemen yang menggambar kotak"? Bila ya, fixture `nesting.html` disusun sesuai itu. Bila tidak, aturan SD-02 diubah (tanpa perubahan format) dengan biaya kerapian teks |
+Tidak ada pertanyaan terbuka. Keputusan pemilik (2026-10-13):
+
+| # | Pertanyaan | Keputusan | Rujukan |
+|---|---|---|---|
+| PQ-01 | Privasi URL | URL disimpan tanpa query string dan hash; fetch dan deduplikasi di memori memakai URL penuh | SD-13; PRD v0.5 11.1 no. 24 |
+| PQ-02 | `visibility: hidden` dengan keturunan terlihat | Induk tetap dicatat (kotak tidak digambar); dilewati hanya bila tanpa keturunan terlihat | SD-14; PRD v0.5 11.1 no. 25 |
+| PQ-03 | Inline polos dan K1-06 | SD-02 dipertahankan; inline polos diserap menjadi run. K1-06 dibaca sebagai nesting elemen yang menggambar kotak atau berperan sebagai wadah | SD-02; PRD v0.5 11.1 no. 23 |
 
 ### 11.3 Usulan konfigurasi baru (untuk ARCHITECTURE bagian 9)
 
-| # | Kunci | Nilai awal | Alasan | Dipakai di |
-|---|---|---|---|---|
-| K-01 | `warningSampleNodeIds` | 20 | Cukup untuk menemukan contoh di panel layer Figma, sekaligus membatasi ukuran laporan (VC-26) | shared/report |
-| K-02 | `relayTitleMaxChars` | 120 | Judul cukup terbaca di satu baris UI plugin. Batas ini menjaga header jauh di bawah batas header Node.js **[PERLU VERIFIKASI: batas default `maxHeaderSize`]** | SW, relay |
+| # | Kunci | Nilai awal | Alasan | Dipakai di | Status |
+|---|---|---|---|---|---|
+| K-01 | `warningSampleNodeIds` | 20 | Cukup untuk menemukan contoh di panel layer Figma, sekaligus membatasi ukuran laporan (VC-26) | shared/report | Diterima, diterapkan di ARCHITECTURE v0.1.2 |
+| K-02 | `relayTitleMaxChars` | 120 | Judul cukup terbaca di satu baris UI plugin. Batas ini menjaga header jauh di bawah batas header Node.js **[PERLU VERIFIKASI: batas default `maxHeaderSize`]** | SW, relay | Diterima, diterapkan di ARCHITECTURE v0.1.2 |
 
 Selain itu, `FORMAT_MAJOR = 3` dan `FORMAT_MINOR = 0` adalah konstanta format, bukan konfigurasi. Konstanta ini diletakkan di `shared/src/schema` (atau `shared/types`), bukan di `config.ts`.
 
 ### 11.4 Usulan perubahan dokumen lain
 
-| # | Dokumen / bagian | Usulan | Alasan |
-|---|---|---|---|
-| U-01 | ARCHITECTURE 2 (diagram), 4.1 C3/C7/C9, 6 ("`root` (pohon node)") | Ganti "pohon node" menjadi "daftar node (`rootId` + `nodes[]`)" | SD-01 |
-| U-02 | ARCHITECTURE 4.1 C5 ("teks per text node via `Range.getClientRects`") | "teks per segmen dengan run bergaya (SCHEMA 4.4)" | SD-02 |
-| U-03 | ARCHITECTURE 3.4 (`GET /v1/status` memuat "id, judul, waktu") | Judul dipindah ke `GET /v1/pending`; status tanpa isi halaman | SD-10, NFR-03 |
-| U-04 | ARCHITECTURE 3.4 (`PUT` "mengembalikan `captureId`") | `captureId` dibuat extension (`meta.captureId`) dan digemakan relay | SD-03, SD-10 |
-| U-05 | ARCHITECTURE 3.5–3.6 (status "diimpor" setelah slot dikosongkan) | Tambahkan bahwa relay menyimpan `lastImport` (hanya jumlah) sampai PUT berikutnya | Konsistensi diagram dengan AD-03 |
-| U-06 | ARCHITECTURE 3.6 | Catat bahwa pemilihan judul untuk prompt plugin memakai `X-CTF-Title` | SD-10 |
-| U-07 | PRD FR-PLG-16, K1-13 | Sebut iframe same-origin (P-02) secara eksplisit. Skema sudah memakai satu nilai `iframe` untuk keduanya | Temuan tinjauan sebelumnya yang belum diterapkan |
-| U-08 | PRD bagian 6 ("Gradient, background-image, SVG, pseudo-element") | "SVG" → "SVG inline", agar tidak tampak bertentangan dengan baris `<img>` berformat SVG | Temuan tinjauan sebelumnya |
+| # | Dokumen / bagian | Usulan | Alasan | Status |
+|---|---|---|---|---|
+| U-01 | ARCHITECTURE 2 (diagram), 4.1 C3/C7/C9, 6 ("`root` (pohon node)") | Ganti "pohon node" menjadi "daftar node (`rootId` + `nodes[]`)" | SD-01 | Diterima, diterapkan di ARCHITECTURE v0.1.2 |
+| U-02 | ARCHITECTURE 4.1 C5 ("teks per text node via `Range.getClientRects`") | "teks per segmen dengan run bergaya (SCHEMA 4.4)" | SD-02 | Diterima, diterapkan di ARCHITECTURE v0.1.2 |
+| U-03 | ARCHITECTURE 3.4 (`GET /v1/status` memuat "id, judul, waktu") | Judul dipindah ke `GET /v1/pending`; status tanpa isi halaman | SD-10, NFR-03 | Diterima, diterapkan di ARCHITECTURE v0.1.2 |
+| U-04 | ARCHITECTURE 3.4 (`PUT` "mengembalikan `captureId`") | `captureId` dibuat extension (`meta.captureId`) dan digemakan relay | SD-03, SD-10 | Diterima, diterapkan di ARCHITECTURE v0.1.2 |
+| U-05 | ARCHITECTURE 3.5–3.6 (status "diimpor" setelah slot dikosongkan) | Tambahkan bahwa relay menyimpan `lastImport` (hanya jumlah) sampai PUT berikutnya | Konsistensi diagram dengan AD-03 | Diterima, diterapkan di ARCHITECTURE v0.1.2 |
+| U-06 | ARCHITECTURE 3.6 | Catat bahwa pemilihan judul untuk prompt plugin memakai `X-CTF-Title` | SD-10 | Diterima, diterapkan di ARCHITECTURE v0.1.2 |
+| U-07 | PRD FR-PLG-16, K1-13 | Sebut iframe same-origin (P-02) secara eksplisit. Skema sudah memakai satu nilai `iframe` untuk keduanya | Temuan tinjauan sebelumnya yang belum diterapkan | Diterima, diterapkan di PRD v0.5 |
+| U-08 | PRD bagian 6 ("Gradient, background-image, SVG, pseudo-element") | "SVG" → "SVG inline", agar tidak tampak bertentangan dengan baris `<img>` berformat SVG | Temuan tinjauan sebelumnya | Diterima, diterapkan di PRD v0.5 |
+
+---
+
+## Riwayat revisi
+
+| Versi | Tanggal | Perubahan |
+|---|---|---|
+| 0.1 | 2026-10-13 | Draf awal. |
+| 0.1.1 | 2026-10-13 | Keputusan PQ-01 sampai PQ-03, aturan rect root, definisi nodesCreated, status usulan. |

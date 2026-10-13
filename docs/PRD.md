@@ -4,8 +4,8 @@
 |---|---|
 | Pemilik | Indra Pramudya |
 | Status | Draft |
-| Versi | 0.4 (revisi 2026-10-13) |
-| Dokumen terkait | `docs/ARCHITECTURE.md` (v0.1.1), `docs/SCHEMA.md` (belum ada) |
+| Versi | 0.5 (revisi 2026-10-13) |
+| Dokumen terkait | `docs/ARCHITECTURE.md` (v0.1.2), `docs/SCHEMA.md` (v0.1.1) |
 
 Label yang dipakai di dokumen ini:
 - **[ASUMSI]**: belum diputuskan pemilik, dipakai sementara agar persyaratan bisa diuji. Wajib dikonfirmasi atau diganti.
@@ -35,7 +35,7 @@ Arsitektur dua lapis:
 
 **Tujuan**
 - G1. Hasil di Figma sangat mirip dengan halaman aslinya (posisi, ukuran, warna, tipografi).
-- G2. Struktur frame rapi: hierarki mengikuti nesting DOM, tanpa node yang tidak perlu. Di v1, "tanpa node yang tidak perlu" tidak berarti meratakan wrapper, karena hierarki frame harus sama dengan nesting elemen terlihat (K1-06). Perataan wrapper adalah kandidat opsi di versi berikutnya (5.4).
+- G2. Struktur frame rapi: hierarki mengikuti nesting DOM, tanpa node yang tidak perlu. Di v1, "tanpa node yang tidak perlu" tidak berarti meratakan wrapper, karena hierarki frame harus sama dengan nesting elemen yang menggambar kotak atau berperan sebagai wadah (K1-06). Elemen inline polos (`display: inline` tanpa background, border, atau shadow, dengan opacity 1) diserap menjadi run teks, bukan layer terpisah. Perataan wrapper adalah kandidat opsi di versi berikutnya (5.4).
 - G3. Minimal setara fungsi html.to.design dari sisi kemiripan output dan kerapian struktur frame.
 - G4. Transfer dari browser ke Figma dengan sesedikit mungkin langkah manual.
 - G5. Kode dan dokumen cukup jelas untuk dilanjutkan secara bertahap (termasuk oleh AI agent).
@@ -115,7 +115,7 @@ Sasaran jangka panjang adalah semua halaman web dengan prinsip **best effort**. 
 | Halaman sangat panjang (jumlah node besar) | Sebagian | Dapat menyebabkan masalah performa; mungkin perlu pembatasan kedalaman atau jumlah node. Ambang mengikuti hasil pengukuran (NFR-01) |
 | Elemen fixed/sticky | Belum akurat sebelum v3 | Bisa muncul di posisi yang salah atau berulang |
 | Transform CSS | Belum akurat sebelum v3 | |
-| Gradient, background-image, SVG, pseudo-element | Belum didukung sebelum v2 | |
+| Gradient, background-image, SVG inline, pseudo-element | Belum didukung sebelum v2 | |
 | Open shadow DOM | Parsial **[ASUMSI: v2]** | Elemen di dalam open shadow root dapat diakses, tetapi penelusuran shadow tree perlu diimplementasikan (FR-EXT-20) |
 | Closed shadow DOM | Tidak didukung | Isi shadow root tidak dapat dibaca |
 | iframe lintas domain, canvas/WebGL, video | Tidak didukung | Diganti kotak abu-abu bertanda jenis kontennya (FR-PLG-16) |
@@ -136,7 +136,7 @@ Sasaran jangka panjang adalah semua halaman web dengan prinsip **best effort**. 
 | FR-EXT-02 | Capture memakai lebar viewport jendela saat ini dan tinggi halaman penuh (termasuk bagian di luar layar). | v1 |
 | FR-EXT-03 | Sebelum ekstraksi, extension menunggu konten selesai dimuat dan memicu lazy loading (mis. dengan scroll ke seluruh halaman). Waktu tunggu beberapa detik dengan batas jumlah scroll; angka pasti **[DITENTUKAN DI ARCHITECTURE]**. Bila batas tercapai (mis. infinite scroll), konten dipotong pada batas itu dan pemotongan dicatat di laporan (FR-EXT-19). | v1 |
 | FR-EXT-04 | Setiap elemen yang terlihat diekstrak dengan posisi dan ukuran dari `getBoundingClientRect` dan gaya dari `getComputedStyle`; hierarki mengikuti nesting DOM. | v1 |
-| FR-EXT-05 | Elemen yang tidak terlihat (`display: none`, `visibility: hidden`, ukuran 0 tanpa anak terlihat) tidak diekspor **[ASUMSI]**. Elemen di dalam area halaman penuh tetap ditangkap, termasuk yang berada di bawah layar. Elemen dilewati jika (a) berada sepenuhnya di luar area halaman (koordinat negatif atau melewati dimensi dokumen, mis. menu off-canvas atau teks tersembunyi yang diposisikan jauh di luar layar), atau (b) sepenuhnya terpotong oleh `overflow: hidden` induknya **[ASUMSI]** (A6). Jumlah elemen yang dilewati dicatat di laporan (FR-EXT-19). | v1 |
+| FR-EXT-05 | Elemen yang tidak terlihat (`display: none`, `visibility: hidden`, ukuran 0 tanpa anak terlihat) tidak diekspor **[ASUMSI]**. Pengecualian: elemen `visibility: hidden` yang punya keturunan terlihat tetap dicatat (kotaknya tidak digambar) untuk menjaga hierarki. Elemen di dalam area halaman penuh tetap ditangkap, termasuk yang berada di bawah layar. Elemen dilewati jika (a) berada sepenuhnya di luar area halaman (koordinat negatif atau melewati dimensi dokumen, mis. menu off-canvas atau teks tersembunyi yang diposisikan jauh di luar layar), atau (b) sepenuhnya terpotong oleh `overflow: hidden` induknya **[ASUMSI]** (A6). Jumlah elemen yang dilewati dicatat di laporan (FR-EXT-19). | v1 |
 | FR-EXT-06 | Properti v1 (bagian 5.1) diekstrak untuk setiap node yang relevan. | v1 |
 | FR-EXT-07 | Untuk teks, nama font asli (nilai `font-family` dan perkiraan font yang dipakai, yaitu keluarga pertama di `font-family` yang tersedia menurut `document.fonts`) dicatat. Font yang benar-benar dirender tidak dapat diketahui karena browser tidak mengeksposnya tanpa `chrome.debugger`. | v1 |
 | FR-EXT-08 | Gambar `<img>`, termasuk lintas domain, diambil oleh service worker extension (host permissions) dan disertakan sebagai data. | v1 |
@@ -145,7 +145,7 @@ Sasaran jangka panjang adalah semua halaman web dengan prinsip **best effort**. 
 | FR-EXT-11 | Tersedia aksi "Download .json" yang menyimpan hasil capture sebagai file. | v1 |
 | FR-EXT-12 | Tersedia aksi "Copy" yang menyalin hasil capture ke clipboard, dijalankan dari konteks yang tidak bergantung pada fokus dokumen halaman. Copy praktis hanya untuk capture kecil, karena gambar tertanam base64 dapat membuat teks mencapai puluhan MB; untuk capture besar dianjurkan Download lalu upload file. | v1 |
 | FR-EXT-13 | UI extension menampilkan indikator progres selama capture (tahap yang sedang berjalan), status akhir (berhasil, gagal), dan pesan galat yang menyebut penyebabnya. | v1 |
-| FR-EXT-14 | Data yang diekspor mencantumkan metadata capture: URL, judul, lebar viewport, tinggi halaman, waktu capture, versi format data. | v1 |
+| FR-EXT-14 | Data yang diekspor mencantumkan metadata capture: URL, judul, lebar viewport, tinggi halaman, waktu capture, versi format data. URL halaman dicatat tanpa query string dan hash. | v1 |
 | FR-EXT-15 | Ekstraksi gradient, background-image, SVG inline, dan pseudo-element `::before`/`::after`. | v2 |
 | FR-EXT-16 | Ekstraksi informasi layout flex/grid yang dibutuhkan untuk usulan Auto Layout. | v2 |
 | FR-EXT-17 | Ekstraksi `position: fixed`/`sticky` dan `transform` tanpa duplikasi atau pergeseran akibat scroll saat capture. | v3 |
@@ -173,7 +173,7 @@ Sasaran jangka panjang adalah semua halaman web dengan prinsip **best effort**. 
 | FR-PLG-13 | Auto Layout diterapkan pada sebuah frame hanya jika posisi dan ukuran semua anak hasil Auto Layout sama dengan posisi asli dalam toleransi (default ±1 px, dapat dikonfigurasi; lihat 9.1); jika tidak, frame tetap memakai posisi absolut. | v2 |
 | FR-PLG-14 | Render fixed/sticky dan transform. | v3 |
 | FR-PLG-15 | Plugin menampilkan indikator progres selama import. | v1 |
-| FR-PLG-16 | Konten yang tidak didukung (iframe lintas domain, canvas/WebGL, video) dirender sebagai kotak abu-abu bertanda jenis kontennya, dengan ukuran dan posisi asli. | v1 |
+| FR-PLG-16 | Konten yang tidak didukung (iframe lintas domain dan iframe same-origin, canvas/WebGL, video; di data, kedua jenis iframe memakai satu nilai placeholder `iframe`) dirender sebagai kotak abu-abu bertanda jenis kontennya, dengan ukuran dan posisi asli. | v1 |
 
 ## 8. Persyaratan non-fungsional
 
@@ -181,7 +181,7 @@ Sasaran jangka panjang adalah semua halaman web dengan prinsip **best effort**. 
 |---|---|
 | NFR-01 Performa | Pada halaman besar, capture dan import selesai tanpa membekukan tab atau Figma dan menampilkan progres (FR-EXT-13, FR-PLG-15). Ambang angka (jumlah node "halaman besar", waktu maksimum) tidak dikunci sekarang; ditetapkan setelah pengukuran pada implementasi awal. Metrik yang diukur: waktu ekstraksi, waktu rendering, jumlah node, ukuran JSON. Hasil pengukuran juga menentukan perlu tidaknya pembatasan kedalaman atau jumlah node. |
 | NFR-02 Ketahanan | Node atau properti yang hilang/tidak valid tidak menghentikan proses; node tersebut dilewati atau memakai default dan dicatat di laporan. Satu error di satu node tidak boleh menggagalkan seluruh import. |
-| NFR-03 Privasi | Data halaman (DOM, teks, gambar) hanya diproses dan dikirim di mesin pengguna (browser, plugin Figma, dan bila ada, komponen lokal). Tidak ada telemetri atau pengiriman ke server pihak ketiga oleh CodeToFrame. |
+| NFR-03 Privasi | Data halaman (DOM, teks, gambar) hanya diproses dan dikirim di mesin pengguna (browser, plugin Figma, dan bila ada, komponen lokal). Tidak ada telemetri atau pengiriman ke server pihak ketiga oleh CodeToFrame. URL halaman dan URL gambar yang ditulis ke data capture dicatat tanpa query string dan hash; pengambilan gambar tetap memakai URL penuh. |
 | NFR-04 Kompatibilitas Chrome | Extension memakai Manifest V3 dan berjalan di Chrome versi stabil terbaru saat pengujian **[ASUMSI]**. |
 | NFR-05 Kompatibilitas Figma | Plugin berjalan di Figma Desktop, versi terbaru saat pengujian **[ASUMSI]**. Figma di browser tidak wajib untuk saat ini. |
 | NFR-06 Instalasi | README berisi langkah penyiapan awal manual (prasyarat Node.js LTS untuk build dan menjalankan komponen lokal; load unpacked, import plugin development, menjalankan komponen lokal bila diperlukan oleh mekanisme transfer yang dipilih, dan pairing token sekali) yang dapat diikuti dari repo yang baru di-clone. |
@@ -209,14 +209,14 @@ Sasaran jangka panjang adalah semua halaman web dengan prinsip **best effort**. 
 - K1-03. Kontainer `overflow: hidden` memotong anaknya di Figma (clip content aktif).
 - K1-04. `<img>` dari domain lain muncul sebagai Image Fill dengan ukuran sama; gambar yang sengaja dibuat gagal muncul sebagai placeholder dan tercatat di laporan.
 - K1-05. Teks dengan font yang tidak ada di Figma dirender dengan pengganti, dan laporan menampilkan nama font asli serta penggantinya.
-- K1-06. Hierarki layer di Figma sama dengan nesting elemen terlihat di fixture.
+- K1-06. Hierarki layer di Figma sama dengan nesting elemen yang menggambar kotak atau berperan sebagai wadah di fixture; elemen inline polos diserap menjadi run teks, bukan layer terpisah (11.1 no. 23).
 - K1-07. Alur langsung: setelah penyiapan awal (pasang extension, impor plugin, jalankan komponen lokal bila diperlukan oleh mekanisme transfer yang dipilih, dan pairing token sekali) dan dengan plugin sudah terbuka di Figma, setiap capture membutuhkan maksimal 1 langkah manual, yaitu klik "Capture" di extension, sampai frame muncul di Figma.
 - K1-08. Keempat jalur cadangan (download, copy, upload/drag-drop, tempel) menghasilkan frame yang identik dengan jalur langsung.
 - K1-09. Fixture berisi nilai CSS yang tidak dikenali (termasuk nilai flex seperti `stretch`) di-import tanpa crash, dan peringatan tercatat.
 - K1-10. JSON rusak atau tidak lengkap ditolak/diproses sebagian sesuai FR-PLG-03 dan NFR-02, tanpa crash plugin.
 - K1-11. Halaman SPA dan halaman di balik login dari daftar acuan dapat ditangkap.
 - K1-12. Selama capture dan import, indikator progres tampil di extension dan di plugin; setelah ekstraksi fixture, laporan ringkas extension menampilkan jumlah elemen, jumlah gambar, font, dan peringatan yang sesuai isi fixture.
-- K1-13. Fixture berisi iframe lintas domain, canvas, dan video menghasilkan kotak abu-abu bertanda jenis kontennya dengan ukuran dan posisi asli.
+- K1-13. Fixture berisi iframe lintas domain, iframe same-origin, canvas, dan video menghasilkan kotak abu-abu bertanda jenis kontennya dengan ukuran dan posisi asli.
 
 **v2 selesai jika:**
 - K2-01. Linear gradient dua warna dengan sudut tertentu dirender dengan sudut dan color stop yang sama.
@@ -286,6 +286,9 @@ Sasaran jangka panjang adalah semua halaman web dengan prinsip **best effort**. 
 | 20 | Kegagalan di tengah render (P-05) | "Tanpa node setengah jadi" berlaku untuk penolakan validasi; error di tengah render menyisakan frame akar "… (tidak lengkap)" + laporan error. | FR-PLG-03, NFR-02 |
 | 21 | Prasyarat penyiapan (P-06) | Node.js LTS untuk build dan komponen lokal; pairing token sekali saat penyiapan awal. | A1, NFR-06, K1-07 |
 | 22 | SVG lewat `<img>` (P-07) | v1 dirasterisasi bila memungkinkan [ASUMSI] (SP-06); vector di v2. | 5.1, 6 |
+| 23 | Elemen inline polos dan K1-06 (SCHEMA PQ-03) | Elemen inline polos (`display: inline` tanpa background, border, shadow; opacity 1) diserap menjadi run teks, bukan layer. Hierarki frame mengikuti nesting elemen yang menggambar kotak atau berperan sebagai wadah. | G2, K1-06 |
+| 24 | Privasi URL (SCHEMA PQ-01) | URL halaman dan URL gambar disimpan tanpa query string dan hash. Pengambilan gambar dan deduplikasi di memori tetap memakai URL penuh. | FR-EXT-14, NFR-03 |
+| 25 | `visibility: hidden` dengan keturunan terlihat (SCHEMA PQ-02) | Elemen tetap dicatat (kotaknya tidak digambar) untuk menjaga hierarki; dilewati hanya bila tidak punya keturunan terlihat. | FR-EXT-05 |
 
 ### 11.2 Pertanyaan terbuka tersisa
 
@@ -302,3 +305,4 @@ Tidak ada pada saat ini. Hal yang perlu divalidasi tercatat di tabel asumsi (bag
 | 0.3 | 2026-10-13 | Menutup pertanyaan 13–15: partial capture ditunda (5.4, NFR-08), aturan elemen di luar area halaman (FR-EXT-05, A6), plugin terbuka sebagai prasyarat (FR-EXT-21, A7); 11.2 kosong. |
 | 0.3.1 | 2026-10-13 | K1-07 dibuat netral terhadap mekanisme transfer langsung. |
 | 0.4 | 2026-10-13 | Menerapkan P-01 sampai P-07 hasil tinjauan ARCHITECTURE. |
+| 0.5 | 2026-10-13 | Menerapkan hasil tinjauan SCHEMA (PQ-01 sampai PQ-03, U-07, U-08). |
