@@ -4,7 +4,7 @@
 |---|---|
 | Pemilik | Indra Pramudya |
 | Status | Draft |
-| Versi | 0.3 (revisi 2026-10-13) |
+| Versi | 0.3.1 (revisi 2026-10-13) |
 | Dokumen terkait | `docs/ARCHITECTURE.md` (belum ada), `docs/SCHEMA.md` (belum ada) |
 
 Label yang dipakai di dokumen ini:
@@ -180,7 +180,7 @@ Sasaran jangka panjang adalah semua halaman web dengan prinsip **best effort**. 
 | NFR-03 Privasi | Data halaman (DOM, teks, gambar) hanya diproses dan dikirim di mesin pengguna (browser, plugin Figma, dan bila ada, komponen lokal). Tidak ada telemetri atau pengiriman ke server pihak ketiga oleh CodeToFrame. |
 | NFR-04 Kompatibilitas Chrome | Extension memakai Manifest V3 dan berjalan di Chrome versi stabil terbaru saat pengujian **[ASUMSI]**. |
 | NFR-05 Kompatibilitas Figma | Plugin berjalan di Figma Desktop, versi terbaru saat pengujian **[ASUMSI]**. Figma di browser tidak wajib untuk saat ini. |
-| NFR-06 Instalasi | README berisi langkah penyiapan awal manual (load unpacked, import plugin development, dan menjalankan relay lokal bila mekanisme ARCHITECTURE memakainya) yang dapat diikuti dari repo yang baru di-clone. |
+| NFR-06 Instalasi | README berisi langkah penyiapan awal manual (load unpacked, import plugin development, dan menjalankan komponen lokal, bila diperlukan oleh mekanisme transfer yang dipilih) yang dapat diikuti dari repo yang baru di-clone. |
 | NFR-07 Kompatibilitas format data | Data membawa nomor versi format; plugin menolak versi yang tidak didukung dengan pesan jelas (FR-PLG-03). |
 | NFR-08 Maintainability | Format data (SCHEMA) memungkinkan root hasil capture berupa elemen mana pun, bukan hanya `body`, agar partial capture (5.4) dapat ditambahkan kemudian tanpa mengubah format **[ASUMSI]**. |
 
@@ -206,7 +206,7 @@ Sasaran jangka panjang adalah semua halaman web dengan prinsip **best effort**. 
 - K1-04. `<img>` dari domain lain muncul sebagai Image Fill dengan ukuran sama; gambar yang sengaja dibuat gagal muncul sebagai placeholder dan tercatat di laporan.
 - K1-05. Teks dengan font yang tidak ada di Figma dirender dengan pengganti, dan laporan menampilkan nama font asli serta penggantinya.
 - K1-06. Hierarki layer di Figma sama dengan nesting elemen terlihat di fixture.
-- K1-07. Alur langsung: setelah penyiapan awal (pasang extension, impor plugin, jalankan relay) dan dengan plugin sudah terbuka di Figma, setiap capture membutuhkan maksimal 1 langkah manual, yaitu klik "Capture" di extension, sampai frame muncul di Figma.
+- K1-07. Alur langsung: setelah penyiapan awal (pasang extension, impor plugin, jalankan komponen lokal, bila diperlukan oleh mekanisme transfer yang dipilih) dan dengan plugin sudah terbuka di Figma, setiap capture membutuhkan maksimal 1 langkah manual, yaitu klik "Capture" di extension, sampai frame muncul di Figma.
 - K1-08. Keempat jalur cadangan (download, copy, upload/drag-drop, tempel) menghasilkan frame yang identik dengan jalur langsung.
 - K1-09. Fixture berisi nilai CSS yang tidak dikenali (termasuk nilai flex seperti `stretch`) di-import tanpa crash, dan peringatan tercatat.
 - K1-10. JSON rusak atau tidak lengkap ditolak/diproses sebagian sesuai FR-PLG-03 dan NFR-02, tanpa crash plugin.
@@ -289,3 +289,4 @@ Tidak ada pada saat ini. Hal yang perlu divalidasi tercatat di tabel asumsi (bag
 | 0.1 | 2026-10-12 | Draf awal. |
 | 0.2 | 2026-10-13 | Menerapkan keputusan 12 pertanyaan terbuka; menambah open shadow DOM, halaman sangat panjang, laporan/progres (FR-EXT-19, FR-PLG-15), placeholder konten (FR-PLG-16), R8, A4–A5; risiko & asumsi jadi tabel. |
 | 0.3 | 2026-10-13 | Menutup pertanyaan 13–15: partial capture ditunda (5.4, NFR-08), aturan elemen di luar area halaman (FR-EXT-05, A6), plugin terbuka sebagai prasyarat (FR-EXT-21, A7); 11.2 kosong. |
+| 0.3.1 | 2026-10-13 | K1-07 dibuat netral terhadap mekanisme transfer langsung. |
