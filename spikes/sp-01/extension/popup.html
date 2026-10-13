@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --bg: #fff; --fg: #1e1e1e; --muted: #6b6b6b; --line: #e3e3e3; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #202124; --fg: #e8eaed; --muted: #9aa0a6; --line: #3c4043; } }
+  body { font: 12px/1.45 system-ui, sans-serif; width: 380px; margin: 0; padding: 10px; background: var(--bg); color: var(--fg); }
+  fieldset { border: 1px solid var(--line); border-radius: 6px; margin: 0 0 8px; padding: 6px 8px; }
+  legend { color: var(--muted); }
+  input[type=password] { width: 100%; box-sizing: border-box; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 4px 0; }
+  pre { white-space: pre-wrap; word-break: break-all; font: 11px/1.3 ui-monospace, monospace; max-height: 220px; overflow: auto; margin: 0; }
+  .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<fieldset>
+  <legend>Token</legend>
+  <input id="token" type="password" placeholder="Tempel token relay">
+  <div class="row"><button id="save">Simpan</button><span id="saved" class="muted"></span></div>
+</fieldset>
+<fieldset>
+  <legend>Status relay (FR-EXT-21)</legend>
+  <div class="row"><button id="refresh">Refresh</button><label><input id="auto" type="checkbox" checked> auto tiap 1 dtk</label></div>
+  <pre id="status">–</pre>
+</fieldset>
+<fieldset>
+  <legend>Uji extension (E1, E2)</legend>
+  <div class="row">
+    <label><input type="checkbox" class="size" value="0.0009765625" checked>1 KB</label>
+    <label><input type="checkbox" class="size" value="1" checked>1 MB</label>
+    <label><input type="checkbox" class="size" value="10" checked>10 MB</label>
+    <label><input type="checkbox" class="size" value="50" checked>50 MB</label>
+    <label><input type="checkbox" class="size" value="100" checked>100 MB</label>
+  </div>
+  <div class="row"><button id="run">Run tests</button></div>
+</fieldset>
+<fieldset>
+  <legend>Send capture (X1, X2)</legend>
+  <div class="row">
+    <select id="mb"><option value="0.0009765625">1 KB</option><option value="1">1 MB</option><option value="10">10 MB</option><option value="50">50 MB</option><option value="100">100 MB</option></select>
+    <button id="send">Send capture</button>
+  </div>
+</fieldset>
+<div class="muted">Progres: <span id="progress">–</span></div>
+<script src="popup.js"></script>
+</body>
+</html>

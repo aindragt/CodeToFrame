@@ -1,0 +1,347 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --bg: #fff; --fg: #1e1e1e; --muted: #6b6b6b; --line: #e3e3e3; --ok: #0b7a3e; --bad: #c62828; --warn: #a65c00; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #2c2c2c; --fg: #f0f0f0; --muted: #a8a8a8; --line: #444; --ok: #5fd38d; --bad: #ff7b7b; --warn: #ffb74d; } }
+  body { font: 12px/1.45 system-ui, sans-serif; margin: 0; padding: 10px; background: var(--bg); color: var(--fg); }
+  h2 { font-size: 13px; margin: 10px 0 4px; }
+  fieldset { border: 1px solid var(--line); border-radius: 6px; margin: 0 0 8px; padding: 6px 8px; }
+  legend { color: var(--muted); }
+  input, select, button, textarea { font: inherit; }
+  input[type=password], input[type=text] { width: 100%; box-sizing: border-box; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 4px 0; }
+  button { padding: 3px 8px; cursor: pointer; }
+  #results div { border-bottom: 1px solid var(--line); padding: 2px 0; }
+  .pass { color: var(--ok); } .fail, .error { color: var(--bad); } .running, .skipped { color: var(--warn); }
+  textarea { width: 100%; height: 160px; box-sizing: border-box; font: 11px/1.3 ui-monospace, monospace; }
+  .muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<fieldset>
+  <legend>Token &amp; relay</legend>
+  <input id="token" type="password" placeholder="Tempel token relay">
+  <div class="row">
+    <button id="saveToken">Simpan token (clientStorage via main)</button>
+    <label>Base URL <select id="base">
+      <option>http://localhost:47821</option>
+      <option>http://127.0.0.1:47821</option>
+      <option>http://[::1]:47821</option>
+    </select></label>
+  </div>
+</fieldset>
+
+<fieldset>
+  <legend>Uji plugin (P1–P7)</legend>
+  <div class="row">
+    <label>Durasi P3 (detik) <input id="p3secs" type="number" value="15" min="3" style="width:60px"></label>
+    <label><input type="checkbox" class="size" value="1024" checked>1 KB</label>
+    <label><input type="checkbox" class="size" value="1048576" checked>1 MB</label>
+    <label><input type="checkbox" class="size" value="10485760" checked>10 MB</label>
+    <label><input type="checkbox" class="size" value="52428800" checked>50 MB</label>
+    <label><input type="checkbox" class="size" value="104857600" checked>100 MB</label>
+  </div>
+  <div class="row"><button id="run">Run tests</button><span id="runState" class="muted"></span></div>
+</fieldset>
+
+<fieldset>
+  <legend>Mode listen (X1, X2) dan siklus hidup (SP-02)</legend>
+  <div class="row">
+    <button id="listen">Start listen</button>
+    <label>Kondisi <select id="phase">
+      <option value="L1">L1 jendela Figma di depan</option>
+      <option value="L2">L2 tab file Figma lain aktif</option>
+      <option value="L3">L3 aplikasi lain di depan / minimize</option>
+      <option value="L4">L4 UI disembunyikan</option>
+      <option value="free">bebas (bukan uji siklus)</option>
+    </select></label>
+    <button id="hide">L4: sembunyikan UI 120 dtk</button>
+  </div>
+  <div id="listenState" class="muted">listen: mati</div>
+</fieldset>
+
+<div class="row">
+  <button id="sendReport">Kirim laporan</button>
+  <button id="showReport">Tampilkan teks laporan</button>
+  <span id="reportState" class="muted"></span>
+</div>
+
+<h2>Hasil</h2>
+<div id="results"></div>
+<h2>Teks laporan (cadangan bila POST gagal)</h2>
+<textarea id="reportText" readonly></textarea>
+
+<script>
+// SP-01 spike plugin UI. Throwaway code.
+const $ = (id) => document.getElementById(id);
+const BASES = ['http://localhost:47821', 'http://127.0.0.1:47821', 'http://[::1]:47821'];
+const report = { kind: 'plugin', startedAt: new Date().toISOString(), userAgent: navigator.userAgent, env: null, tests: {}, lifecycle: { polls: [] }, e2e: [], notes: [] };
+let token = '';
+
+const errStr = (e) => (e && e.name ? e.name + ': ' : '') + (e && e.message ? e.message : String(e));
+const now = () => performance.now();
+const base = () => $('base').value;
+function uuidv4() {
+  if (crypto.randomUUID) { try { return crypto.randomUUID(); } catch (e) { /* not a secure context */ } }
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+function mem() {
+  return performance.memory ? { usedMB: +(performance.memory.usedJSHeapSize / 1048576).toFixed(1), limitMB: +(performance.memory.jsHeapSizeLimit / 1048576).toFixed(1) } : null;
+}
+
+// ---- RPC to main thread ----
+let seq = 0;
+const waiters = new Map();
+window.onmessage = (ev) => {
+  const m = ev.data && ev.data.pluginMessage;
+  if (!m) return;
+  if (m.type === 'shown') { onShown(); return; }
+  const w = waiters.get(m.reqId);
+  if (w) { waiters.delete(m.reqId); w(m); }
+};
+function rpc(type, data = {}, timeoutMs = 30000) {
+  return new Promise((resolve) => {
+    const reqId = ++seq;
+    waiters.set(reqId, resolve);
+    parent.postMessage({ pluginMessage: Object.assign({ type, reqId }, data) }, '*');
+    setTimeout(() => { if (waiters.has(reqId)) { waiters.delete(reqId); resolve({ error: 'rpc timeout ' + type }); } }, timeoutMs);
+  });
+}
+
+// ---- relay helpers ----
+function api(path, { method = 'GET', headers = {}, body, auth = true, at = base() } = {}) {
+  const h = Object.assign({}, headers);
+  if (auth) h.Authorization = 'Bearer ' + token;
+  return fetch(at + path, { method, headers: h, body });
+}
+async function apiJson(path, opts) {
+  const t0 = now();
+  try {
+    const r = await api(path, opts);
+    const text = await r.text();
+    let json = null; try { json = JSON.parse(text); } catch (e) { /* ignore */ }
+    return { status: r.status, json, ms: Math.round(now() - t0) };
+  } catch (e) {
+    return { error: errStr(e), ms: Math.round(now() - t0) };
+  }
+}
+
+// ---- results UI ----
+function show(id, status, detail) {
+  report.tests[id] = Object.assign({ id, status }, detail || {});
+  let el = document.querySelector(`[data-id="${id}"]`);
+  if (!el) { el = document.createElement('div'); el.dataset.id = id; $('results').appendChild(el); }
+  el.className = status;
+  el.textContent = `${id}  ${status.toUpperCase()}  ${detail && detail.summary ? detail.summary : ''}`;
+}
+function reportJson() { return JSON.stringify(Object.assign({ generatedAt: new Date().toISOString(), lifecycleSummary: lifecycleSummary() }, report), null, 2); }
+
+// ---- tests ----
+async function P1() {
+  const d = { windowOrigin: String(window.origin), href: String(location.href).slice(0, 200), referrer: document.referrer, isSecureContext: window.isSecureContext, memory: mem() };
+  try { d.localStorageType = typeof localStorage; localStorage.setItem('ctf-x', '1'); d.localStorageWorks = localStorage.getItem('ctf-x') === '1'; localStorage.removeItem('ctf-x'); } catch (e) { d.localStorageError = errStr(e); }
+  d.env = await rpc('env');
+  report.env = d.env;
+  show('P1', 'pass', Object.assign({ summary: `origin=${d.windowOrigin}; localStorage=${d.localStorageWorks ? 'ok' : d.localStorageError || '-'}; memory=${d.memory ? 'ada' : 'tidak ada'}; pluginId=${d.env.pluginId}; main fetch=${d.env.mainHasFetch}` }, d));
+}
+
+async function P2() {
+  const rows = [];
+  for (const b of BASES) {
+    const withAuth = await apiJson('/v1/status', { at: b });
+    const noAuth = await apiJson('/v1/status', { at: b, auth: false });
+    const star = await apiJson('/v1/status?spike_acao=star', { at: b });
+    const echo = await apiJson('/spike/echo', { at: b });
+    rows.push({ base: b, withAuth, noAuthSimple: noAuth, acaoStar: star, echo: echo.json || echo.error });
+  }
+  const okBases = rows.filter((r) => r.withAuth.status === 200).map((r) => r.base);
+  if (okBases.length) $('base').value = okBases[0];
+  const summary = rows.map((r) => `${r.base.replace('http://', '')}: auth ${r.withAuth.status || r.withAuth.error}, tanpa auth ${r.noAuthSimple.status || r.noAuthSimple.error}, ACAO* ${r.acaoStar.status || r.acaoStar.error}`).join(' | ');
+  show('P2', okBases.length ? (okBases.length === BASES.length ? 'pass' : 'pass') : 'fail', { summary, okBases, rows });
+}
+
+async function P3() {
+  const secs = Number($('p3secs').value) || 15;
+  const stamps = []; const fails = [];
+  const end = Date.now() + secs * 1000;
+  while (Date.now() < end) {
+    const t = Date.now();
+    const r = await apiJson('/v1/pending');
+    stamps.push(t);
+    if (r.status !== 200) fails.push(r.status || r.error);
+    await new Promise((res) => setTimeout(res, Math.max(0, 1000 - (Date.now() - t))));
+  }
+  const gaps = stamps.slice(1).map((t, i) => t - stamps[i]);
+  const st = stats(gaps);
+  const status = await apiJson('/v1/status');
+  show('P3', fails.length === 0 && st.max < 2000 ? 'pass' : 'fail', { summary: `${stamps.length} poll, interval mean ${st.mean} ms, max ${st.max} ms, gagal ${fails.length}, pluginConnected=${status.json && status.json.pluginConnected}`, intervals: st, fails, pluginConnectedAfter: status.json && status.json.pluginConnected });
+}
+
+async function P4() {
+  const sizes = [...document.querySelectorAll('.size:checked')].map((c) => Number(c.value));
+  const rows = [];
+  for (const n of sizes) {
+    const row = { bytes: n, memBefore: mem() };
+    try {
+      const t0 = now();
+      const r = await api('/spike/payload?bytes=' + n);
+      let text = await r.text();
+      const t1 = now();
+      row.status = r.status; row.received = text.length; row.downloadMs = Math.round(t1 - t0);
+      let obj = JSON.parse(text);
+      row.parseMs = Math.round(now() - t1);
+      row.parsedOk = obj.format === 'codetoframe';
+      row.memAfterParse = mem();
+      obj = null; text = null;
+    } catch (e) { row.error = errStr(e); }
+    rows.push(row);
+    show('P4', 'running', { summary: `${rows.length}/${sizes.length} ukuran selesai`, rows });
+    await new Promise((res) => setTimeout(res, 300));
+  }
+  const ok = rows.every((r) => r.parsedOk);
+  show('P4', ok ? 'pass' : 'fail', { summary: rows.map((r) => `${(r.bytes / 1048576).toFixed(r.bytes < 1048576 ? 3 : 0)}MB: ${r.error ? r.error : r.downloadMs + 'ms unduh / ' + r.parseMs + 'ms parse'}`).join('; '), rows });
+}
+
+async function P5() {
+  const d = {};
+  d.mainProbe = await rpc('token:probe');
+  d.mainTokenPresent = !!(await rpc('token:get')).token;
+  d.uiTypeofFigma = typeof window.figma;
+  try { d.uiClientStorage = window.figma && window.figma.clientStorage ? 'tersedia' : 'tidak tersedia (figma ' + typeof window.figma + ')'; } catch (e) { d.uiClientStorage = 'error: ' + errStr(e); }
+  try { localStorage.setItem('ctf-y', '1'); d.uiLocalStorage = localStorage.getItem('ctf-y') === '1' ? 'berhasil' : 'gagal baca'; localStorage.removeItem('ctf-y'); } catch (e) { d.uiLocalStorage = 'error: ' + errStr(e); }
+  const ok = d.mainProbe.roundTripOk === true;
+  show('P5', ok ? 'pass' : 'fail', Object.assign({ summary: `main clientStorage round-trip=${d.mainProbe.roundTripOk}; UI figma=${d.uiTypeofFigma}; UI clientStorage=${d.uiClientStorage}; UI localStorage=${d.uiLocalStorage}` }, d));
+}
+
+async function P6() {
+  const id = uuidv4();
+  const body = JSON.stringify({ format: 'codetoframe', formatVersion: '3.0', note: 'P6 synthetic', pad: 'x'.repeat(900) });
+  const put = await apiJson('/v1/capture', { method: 'PUT', body, headers: { 'Content-Type': 'application/json', 'X-CTF-Capture-Id': id, 'X-CTF-Format-Version': '3.0', 'X-CTF-Captured-At': new Date().toISOString(), 'X-CTF-Title': encodeURIComponent('P6 dari plugin') } });
+  const pending = await apiJson('/v1/pending');
+  const ack = await apiJson(`/v1/capture/${id}/ack`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ outcome: 'imported', nodesCreated: 1, fontSubstitutions: 0, placeholders: 0, warningCounts: {}, durationMs: 1 }) });
+  const status = await apiJson('/v1/status');
+  const ok = put.status === 200 && ack.json && ack.json.slotCleared === true && status.json && status.json.lastImport && status.json.lastImport.captureId === id;
+  show('P6', ok ? 'pass' : 'fail', { summary: `PUT ${put.status || put.error}, pending title=${pending.json && pending.json.pending ? pending.json.pending.title : '-'}, ack ${ack.status || ack.error}, lastImport ${!!(status.json && status.json.lastImport)}`, put, ack, lastImport: status.json && status.json.lastImport });
+}
+
+async function P7() {
+  const rows = [];
+  for (const b of BASES) {
+    const status = await rpc('main-fetch', { url: b + '/v1/status', headers: { Authorization: 'Bearer ' + token } });
+    const echo = await rpc('main-fetch', { url: b + '/spike/echo', headers: { Authorization: 'Bearer ' + token } });
+    rows.push({ base: b, status, echo });
+  }
+  const anyOk = rows.some((r) => r.status.status === 200);
+  show('P7', anyOk ? 'pass' : 'fail', { summary: rows.map((r) => `${r.base.replace('http://', '')}: ${r.status.status || r.status.error}`).join(' | '), rows });
+}
+
+async function runAll() {
+  if (!token) { $('runState').textContent = 'token kosong'; return; }
+  $('run').disabled = true;
+  for (const [id, fn] of [['P1', P1], ['P2', P2], ['P3', P3], ['P4', P4], ['P5', P5], ['P6', P6], ['P7', P7]]) {
+    $('runState').textContent = 'menjalankan ' + id + '…';
+    show(id, 'running', { summary: '…' });
+    const t0 = now();
+    try { await fn(); } catch (e) { show(id, 'error', { summary: errStr(e) }); }
+    report.tests[id].durationMs = Math.round(now() - t0);
+  }
+  $('runState').textContent = 'selesai';
+  $('run').disabled = false;
+  await sendReport();
+}
+
+// ---- listen mode, e2e and lifecycle ----
+let listening = false; let known = ''; let busy = false;
+let phaseBeforeHide = null;
+async function pollOnce() {
+  const t = Date.now();
+  const phase = $('phase').value;
+  const r = await apiJson('/v1/pending' + (known ? '?known=' + known : ''));
+  report.lifecycle.polls.push({ t, phase, ok: r.status === 200 });
+  if (report.lifecycle.polls.length > 5000) report.lifecycle.polls.shift();
+  $('listenState').textContent = `listen: aktif, poll terakhir ${new Date(t).toLocaleTimeString()} (${phase}), status ${r.status || r.error}`;
+  const p = r.json && r.json.pending;
+  if (p && p.captureId !== known && !busy) { busy = true; importCapture(p).finally(() => { busy = false; }); }
+}
+async function importCapture(p) {
+  const e = { captureId: p.captureId, sizeBytes: p.sizeBytes, title: p.title, detectedLatencyMs: Date.now() - Date.parse(p.receivedAt) };
+  try {
+    const t0 = now();
+    const r = await api('/v1/capture/' + p.captureId);
+    let text = await r.text();
+    const t1 = now();
+    let obj = JSON.parse(text);
+    const t2 = now();
+    e.downloadMs = Math.round(t1 - t0); e.parseMs = Math.round(t2 - t1); e.status = r.status; e.parsedOk = obj.format === 'codetoframe';
+    obj = null; text = null;
+    const ack = await apiJson(`/v1/capture/${p.captureId}/ack`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ outcome: 'imported', nodesCreated: 1, fontSubstitutions: 0, placeholders: 0, warningCounts: {}, durationMs: Math.round(t2 - t0) }) });
+    e.ackStatus = ack.status || ack.error;
+    e.totalSinceReceivedMs = Date.now() - Date.parse(p.receivedAt);
+  } catch (err) { e.error = errStr(err); }
+  known = p.captureId;
+  report.e2e.push(e);
+  show('X-' + report.e2e.length, e.parsedOk && e.ackStatus === 200 ? 'pass' : 'fail', Object.assign({ summary: `${(e.sizeBytes / 1048576).toFixed(2)} MB "${e.title || ''}": terdeteksi ${e.detectedLatencyMs} ms, unduh ${e.downloadMs} ms, parse ${e.parseMs} ms, ack ${e.ackStatus}, total ${e.totalSinceReceivedMs} ms` }, e));
+}
+function loop() {
+  if (!listening) return;
+  const t = Date.now();
+  pollOnce().finally(() => setTimeout(loop, Math.max(0, 1000 - (Date.now() - t))));
+}
+$('listen').onclick = () => {
+  listening = !listening;
+  $('listen').textContent = listening ? 'Stop listen' : 'Start listen';
+  if (listening) loop(); else $('listenState').textContent = 'listen: mati';
+};
+$('hide').onclick = async () => {
+  phaseBeforeHide = $('phase').value;
+  $('phase').value = 'L4';
+  if (!listening) $('listen').click();
+  const r = await rpc('hide', { ms: 120000 });
+  if (r.error) { report.notes.push('L4: ' + r.error); $('phase').value = phaseBeforeHide; show('L4', 'error', { summary: r.error }); }
+};
+function onShown() { if (phaseBeforeHide) { $('phase').value = phaseBeforeHide; phaseBeforeHide = null; } report.notes.push('L4: UI ditampilkan lagi ' + new Date().toISOString()); }
+
+function stats(arr) {
+  if (!arr.length) return { count: 0 };
+  const s = [...arr].sort((a, b) => a - b);
+  const q = (p) => s[Math.min(s.length - 1, Math.floor(p * (s.length - 1)))];
+  return { count: arr.length, mean: Math.round(arr.reduce((a, b) => a + b, 0) / arr.length), p50: q(0.5), p95: q(0.95), max: s[s.length - 1], over2000: arr.filter((g) => g > 2000).length, over3000: arr.filter((g) => g > 3000).length };
+}
+function lifecycleSummary() {
+  const polls = report.lifecycle.polls; const by = {};
+  for (let i = 1; i < polls.length; i++) {
+    if (polls[i].phase !== polls[i - 1].phase) continue;
+    (by[polls[i].phase] = by[polls[i].phase] || []).push(polls[i].t - polls[i - 1].t);
+  }
+  const out = {};
+  for (const k of Object.keys(by)) out[k] = Object.assign(stats(by[k]), { failedPolls: polls.filter((p) => p.phase === k && !p.ok).length });
+  return out;
+}
+
+// ---- report ----
+async function sendReport() {
+  const text = reportJson();
+  $('reportText').value = text;
+  const r = await apiJson('/spike/report/plugin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: text });
+  $('reportState').textContent = r.status === 200 ? 'laporan terkirim ' + new Date().toLocaleTimeString() : 'POST laporan gagal (' + (r.status || r.error) + '); salin teks di bawah';
+}
+$('sendReport').onclick = sendReport;
+$('showReport').onclick = () => { $('reportText').value = reportJson(); };
+$('run').onclick = runAll;
+$('saveToken').onclick = async () => {
+  token = $('token').value.trim();
+  const r = await rpc('token:set', { token });
+  $('runState').textContent = r.ok ? 'token tersimpan di clientStorage (main)' : 'gagal simpan: ' + r.error;
+};
+$('token').oninput = () => { token = $('token').value.trim(); };
+
+// Load token from main thread on start (P5 flow).
+rpc('token:get').then((r) => { if (r.token) { token = r.token; $('token').value = r.token; $('runState').textContent = 'token dimuat dari clientStorage'; } });
+</script>
+</body>
+</html>

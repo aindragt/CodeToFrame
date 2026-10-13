@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "CodeToFrame SP-01 spike",
+  "version": "0.0.1",
+  "description": "Throwaway SP-01 harness: talks to the local relay only. No content scripts.",
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_popup": "popup.html", "default_title": "CodeToFrame SP-01" },
+  "permissions": ["storage"],
+  "host_permissions": ["http://localhost/*", "http://127.0.0.1/*", "http://[::1]/*"]
+}

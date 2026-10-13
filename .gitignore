@@ -1,0 +1,4 @@
+# Spike SP-01: hasil uji lokal dan token tidak di-commit
+spikes/sp-01/results/
+spikes/sp-01/**/*.token
+spikes/sp-01/**/.token*
