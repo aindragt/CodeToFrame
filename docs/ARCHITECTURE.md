@@ -4,9 +4,9 @@
 |---|---|
 | Pemilik | Indra Pramudya |
 | Status | Draft |
-| Versi | 0.1 |
+| Versi | 0.1.1 |
 | Tanggal | 2026-10-13 |
-| Dokumen terkait | `docs/PRD.md` v0.3.1 (acuan utama), `docs/SCHEMA.md` (belum ada) |
+| Dokumen terkait | `docs/PRD.md` v0.4 (acuan utama), `docs/SCHEMA.md` (belum ada) |
 
 Label yang dipakai:
 - **[PERLU VERIFIKASI]**: fakta platform (Chrome/Figma) yang belum terkonfirmasi dari dokumentasi resmi. Setiap label punya spike di bagian 11.
@@ -72,7 +72,7 @@ flowchart LR
 | **Service worker** (`extension/src/background`) | Proses extension (MV3) | `scripting`, `storage`, `host_permissions: ["<all_urls>"]` | Orkestrasi capture, status progres, fetch dan konversi gambar, merakit amplop data, simpan ke IndexedDB, kirim ke relay, cek status koneksi | Akses DOM; clipboard; menampilkan UI; menerima perintah fetch URL bebas dari content script (hanya URL gambar yang tercatat di pohon node) |
 | **Popup** (`extension/src/popup`) | Halaman extension, punya fokus dokumen saat terbuka | Sama dengan origin extension | Tombol Capture, status koneksi (FR-EXT-21), progres (FR-EXT-13), laporan ringkas (FR-EXT-19), Download (FR-EXT-11), Copy (FR-EXT-12), pengaturan token pairing | Menjalankan capture (popup bisa tertutup kapan saja); menyimpan state penting di memorinya sendiri |
 | **Relay lokal** (`relay/`) | Proses Node.js di terminal pengguna | Listen hanya di loopback | Menerima capture dari extension, menyimpan satu capture terakhir di memori, menyajikannya ke plugin, melacak heartbeat plugin | Menyimpan ke disk (kecuali file token); mencatat isi capture di log; menerima koneksi non-loopback; memproses/mengubah isi capture |
-| **UI plugin** (`plugin/src/ui`) | Iframe Figma (`figma.showUI`), punya akses API browser | `networkAccess.devAllowedDomains` ke relay | Polling relay, upload/drag-drop/tempel (FR-PLG-02), parse + validasi + cek versi, decode gambar, menyuplai batch ke main thread, menampilkan progres dan laporan | Mengakses scene Figma; memetakan CSS ke Figma |
+| **UI plugin** (`plugin/src/ui`) | Iframe Figma (`figma.showUI`), punya akses API browser | `networkAccess.devAllowedDomains` ke relay | Polling relay, meminta token pairing ke main thread lewat pesan (karena `figma.clientStorage` diakses dari main thread **[PERLU VERIFIKASI]**, SP-01), upload/drag-drop/tempel (FR-PLG-02), parse + validasi + cek versi, decode gambar, menyuplai batch ke main thread, menampilkan progres dan laporan | Mengakses scene Figma; memetakan CSS ke Figma |
 | **Main thread plugin** (`plugin/src/main`) | Sandbox Figma (tanpa API browser, ES2020+) | Scene API Figma, `documentAccess: "dynamic-page"` | Pemuatan font + fallback, pembuatan node, penerapan hasil pemetaan, verifikasi Auto Layout (v2), menyusun laporan import | Network; parsing JSON mentah dari luar tanpa validasi; logika pemetaan sendiri di luar modul `shared/mapping` |
 | **shared** (`shared/`) | Di-bundle ke semua komponen | — | Tipe data, konstanta konfigurasi, validator, pemetaan CSS→Figma, penamaan layer, aturan filter keterlihatan, pencocokan font, simulasi Auto Layout | Bergantung pada API Chrome, Figma, Node, atau DOM (harus murni agar bisa diuji unit) |
 
@@ -115,10 +115,11 @@ Opsi A: **relay HTTP lokal (Node.js, tanpa dependensi runtime)**, dengan UI plug
 
 ### 3.4 Protokol relay (sketsa)
 
-Semua endpoint di bawah prefiks `/v1`, semua butuh header `Authorization: Bearer <token>` (bagian 3.8). Bentuk body JSON rinci diserahkan ke SCHEMA.
+Semua endpoint di bawah prefiks `/v1`. Semua endpoint kecuali preflight `OPTIONS` butuh header `Authorization: Bearer <token>` (bagian 3.8). Bentuk body JSON rinci diserahkan ke SCHEMA.
 
 | Endpoint | Pemanggil | Fungsi |
 |---|---|---|
+| `OPTIONS /v1/*` (preflight CORS) | Browser, otomatis | Tidak butuh token karena preflight tidak membawa header `Authorization`. Tetap melewati pemeriksaan `Host` dan `Origin` (3.9); respons hanya berisi header CORS, tanpa data |
 | `GET /v1/status` | Extension | Versi protokol relay, `pluginConnected` (heartbeat), metadata capture yang tertunda (id, judul, waktu) bila ada |
 | `PUT /v1/capture` | Extension | Mengunggah amplop capture; menggantikan slot sebelumnya; mengembalikan `captureId` |
 | `GET /v1/pending?known=<captureId>` | UI plugin, tiap `pollIntervalMs` | Heartbeat plugin + metadata capture terbaru bila berbeda dari `known` |
@@ -183,7 +184,7 @@ Opsi dari FR-EXT-10 diputuskan: **ya, relay menyimpan satu capture terakhir di m
   - Bila capture baru tiba **saat plugin terbuka**, import berjalan otomatis (memenuhi K1-07).
   - Bila plugin **baru dibuka dan ada capture tertunda**, plugin menampilkan "Import capture terakhir: {judul}, {waktu}" dan menunggu klik.
 
-  Alasan: import otomatis saat plugin dibuka dapat mengejutkan pengguna yang membuka plugin untuk tujuan lain (mis. upload file), sedangkan urutan "capture dulu, buka plugin kemudian" tetap didukung dengan satu klik tambahan. Ini di luar cakupan K1-07, karena K1-07 mensyaratkan plugin sudah terbuka.
+  Alasan: import otomatis saat plugin dibuka dapat mengejutkan pengguna yang membuka plugin untuk tujuan lain (mis. upload file), sedangkan urutan "capture dulu, buka plugin kemudian" tetap didukung dengan satu klik tambahan. Ini di luar cakupan K1-07, karena K1-07 mensyaratkan plugin sudah terbuka. Perilaku ini (import otomatis hanya bila plugin sudah terbuka; satu klik bila plugin baru dibuka dan ada capture tertunda) dikonfirmasi oleh pemilik pada 2026-10-13.
 - **Di sisi extension**, amplop terakhir disimpan di IndexedDB extension (satu record, ditimpa tiap capture, dihapus saat `chrome.runtime.onStartup`). Tujuannya agar Download dan Copy tetap tersedia walaupun service worker dihentikan Chrome (idle 30 detik).
 
 ### 3.7 Status koneksi dan jalur cadangan (FR-EXT-21)
@@ -210,7 +211,7 @@ Jalur cadangan:
   2. Chrome: `chrome://extensions` → Developer mode → Load unpacked → `extension/dist`.
   3. Figma Desktop: Plugins → Development → Import plugin from manifest → `plugin/dist/manifest.json`.
   4. `npm run relay`. Saat pertama kali jalan, relay membuat token acak dan menyimpannya di file token di folder konfigurasi pengguna.
-  5. Tempel token ke pengaturan popup extension (disimpan di `chrome.storage.local`) dan ke pengaturan plugin (disimpan di `figma.clientStorage`).
+  5. Tempel token ke pengaturan popup extension (disimpan di `chrome.storage.local`) dan ke pengaturan plugin. UI plugin mengirim token ke main thread lewat pesan, lalu main thread menyimpannya di `figma.clientStorage`. Saat plugin dibuka, UI meminta token ke main thread lewat pesan. Alasannya, `figma.clientStorage` diakses dari main thread, bukan dari iframe UI **[PERLU VERIFIKASI]**, SP-01.
 - **Rotasi token:** `npm run relay -- --new-token`, lalu ulangi langkah 5.
 
 ### 3.9 Keamanan dasar (AD-04)
@@ -226,7 +227,7 @@ Jalur cadangan:
 | Pembatasan | Alasan |
 |---|---|
 | Listen hanya di `127.0.0.1` dan `::1` | Menutup penyerang (2). Dua listener dipasang karena `localhost` dapat resolve ke IPv6 lebih dulu **[PERLU VERIFIKASI]** |
-| Token bearer acak 128-bit di setiap request; dibandingkan secara constant-time | Penyerang (1): situs lain tidak tahu token. Juga mencegah penyuntikan capture palsu yang akan otomatis dirender di Figma |
+| Token bearer acak 128-bit di setiap request kecuali preflight `OPTIONS` (yang tidak mengembalikan data); dibandingkan secara constant-time | Penyerang (1): situs lain tidak tahu token. Juga mencegah penyuntikan capture palsu yang akan otomatis dirender di Figma |
 | Cek header `Host` harus `localhost:PORT`, `127.0.0.1:PORT`, atau `[::1]:PORT` | Menutup DNS rebinding (3) |
 | Allowlist `Origin`: hanya `chrome-extension://*` dan `null` (iframe plugin **[PERLU VERIFIKASI: nilai origin iframe plugin]**); origin `http(s)` situs ditolak 403 sebelum token diperiksa | Lapisan tambahan terhadap (1). `null` tetap bisa dipalsukan oleh iframe sandbox, jadi token adalah pertahanan utama |
 | CORS hanya memantulkan origin yang lolos allowlist; tanpa `*` | Situs lain tidak bisa membaca respons |
@@ -269,7 +270,7 @@ Catatan geometri v1: capture memakai posisi scroll 0 setelah C2, sehingga elemen
 | R7 | Auto Layout (v2, FR-PLG-13) | Main + `shared/autolayout` | frame + anak → Auto Layout atau tetap absolut | Lihat 7.6. Ragu → absolut |
 | R8 | Laporan (FR-PLG-10) | Main → UI | akumulasi peringatan → laporan di UI + ringkasan `ack` ke relay | — |
 
-Transaksi "tanpa node setengah jadi" (FR-PLG-03) berlaku untuk error fatal di R2, yang terjadi sebelum node apa pun dibuat. Bila error tak terduga terjadi di tengah R5, frame akar yang sudah dibuat **dibiarkan** dan diberi nama `… (tidak lengkap)`, disertai laporan error. Alasannya: menghapus hasil parsial menyembunyikan informasi diagnostik. **[ASUMSI]**, lihat usulan perubahan PRD P-05.
+Transaksi "tanpa node setengah jadi" (FR-PLG-03) berlaku untuk error fatal di R2, yang terjadi sebelum node apa pun dibuat. Bila error tak terduga terjadi di tengah R5, frame akar yang sudah dibuat **dibiarkan** dan diberi nama `… (tidak lengkap)`, disertai laporan error. Alasannya: menghapus hasil parsial menyembunyikan informasi diagnostik. Sesuai keputusan PRD v0.4 (P-05; PRD FR-PLG-03, 11.1 no. 20).
 
 ## 5. Ukuran data besar
 
@@ -447,7 +448,7 @@ CodeToFrame/
 | `npm run typecheck` | `tsc --noEmit` untuk semua target |
 
 **Manifest:**
-- **Extension:** MV3; `background.service_worker` dengan `type: "module"`; permissions `scripting`, `storage`; `host_permissions: ["<all_urls>"]` (dibutuhkan untuk fetch gambar lintas domain dan untuk relay). Content script tidak dideklarasikan statis; content script di-inject saat Capture.
+- **Extension:** MV3; `background.service_worker` dengan `type: "module"`; permissions `scripting`, `storage`; `host_permissions: ["<all_urls>"]` (dibutuhkan untuk fetch gambar lintas domain dan untuk relay). Content script tidak dideklarasikan statis; content script di-inject saat Capture. Karena repo publik, alasan izin `<all_urls>` harus dijelaskan di README. Opsi untuk dikaji nanti: meminta izin host secara opsional saat runtime (keputusan manifest saat ini tidak berubah).
 - **Plugin:** `editorType: ["figma"]`, `documentAccess: "dynamic-page"` (wajib untuk plugin baru, sehingga semua akses dokumen memakai API async), `networkAccess.allowedDomains: ["none"]`, `devAllowedDomains: ["http://localhost:<port>"]`. Apakah plugin development butuh `id`: **[PERLU VERIFIKASI]**.
 
 ## 9. Tabel konfigurasi nilai awal
@@ -505,7 +506,7 @@ Sumber tunggal: `shared/src/config.ts` (konstanta bertipe, diekspor). Manifest d
 |---|---|---|---|
 | Unit | `shared/*`: pemetaan (setiap baris tabel), normalisasi warna/panjang, `visibility`, `naming`, `fonts` (dengan daftar font tiruan), `validate`, `autolayout.simulate` | Vitest | K1-05 (logika), K1-06, K1-09, K1-10, K2-04/05 (logika) |
 | Snapshot ekstraksi | Extractor dibundel dan dijalankan di Chromium (Playwright) pada setiap fixture fitur dengan viewport tetap. Hasil JSON dinormalisasi (buang waktu/versi), dibulatkan, lalu dibandingkan dengan `fixtures/snapshots` | Playwright + Vitest | K1-01..06, K1-12 (laporan ekstraksi), K1-13 |
-| Relay | Uji HTTP: token salah → 401, `Host` asing → 403, `Origin` situs → 403, body terlalu besar → 413, TTL slot, ack | Vitest + `fetch` Node | 3.9 |
+| Relay | Uji HTTP: token salah → 401, `Host` asing → 403, `Origin` situs → 403, body terlalu besar → 413, TTL slot, ack. Preflight `OPTIONS`: tanpa token dengan `Origin` yang diizinkan → sukses tanpa data; `Host` asing atau `Origin` situs → 403 | Vitest + `fetch` Node | 3.9 |
 
 Snapshot ekstraksi bergantung pada versi Chromium dan OS. Snapshot dibuat dan diperbarui di mesin pengembang, dan pembaruan dicek lewat diff.
 
@@ -532,7 +533,7 @@ Spike dijalankan berurutan sebelum implementasi fitur terkait. Setiap spike beru
 
 | # | Spike | Tujuan | Cara membuktikan | Lulus | Gagal → dampak |
 |---|---|---|---|---|---|
-| SP-01 | Jalur transfer langsung (A7, FR-EXT-21, AD-02) | Iframe plugin development di Figma Desktop bisa `fetch` ke `http://localhost:PORT`; SW extension juga | Relay minimal + plugin minimal dengan `devAllowedDomains`. Catat nilai `Origin` iframe, perilaku CORS/preflight dengan header `Authorization`, prompt Local Network Access, IPv4/IPv6. Uji payload 1 KB dan 100 MB | Kedua sisi round-trip sukses tanpa prompt berulang; 100 MB selesai tanpa error | Coba opsi C (UI dimuat dari relay). Bila C juga gagal: transfer langsung tidak layak dan hanya tersisa jalur cadangan, sehingga K1-07 perlu direvisi di PRD |
+| SP-01 | Jalur transfer langsung (A7, FR-EXT-21, AD-02) | Iframe plugin development di Figma Desktop bisa `fetch` ke `http://localhost:PORT`; SW extension juga | Relay minimal + plugin minimal dengan `devAllowedDomains`. Catat nilai `Origin` iframe, perilaku CORS/preflight dengan header `Authorization`, apakah `figma.clientStorage` hanya dapat diakses dari main thread (alur token 3.8), prompt Local Network Access, IPv4/IPv6. Uji payload 1 KB dan 100 MB | Kedua sisi round-trip sukses tanpa prompt berulang; 100 MB selesai tanpa error | Coba opsi C (UI dimuat dari relay). Bila C juga gagal: transfer langsung tidak layak dan hanya tersisa jalur cadangan, sehingga K1-07 perlu direvisi di PRD |
 | SP-02 | Siklus hidup plugin (A7) | Konfirmasi plugin tidak bisa dijalankan dari luar. Ukur apakah polling iframe tetap berjalan saat tab file Figma lain aktif atau jendela diminimalkan | Plugin polling dengan log timestamp; pindah tab/minimize | Polling tetap ≤ 2× interval | Bila di-throttle: naikkan `pluginHeartbeatTimeoutMs` dan perjelas pesan FR-EXT-21. Arsitektur tetap |
 | SP-03 | Data besar | Ukur pipeline pada halaman sintetis 10 000 / 50 000 node dan 50 MB gambar: chunking CS→SW, upload relay, parse di iframe, pull batch ke main, waktu `createFrame` | Fixture sintetis + metrik NFR-01 | Tab dan Figma tetap responsif (progres bergerak); tidak ada crash memori | Turunkan batas gambar; aktifkan `maxNodes`; pertimbangkan streaming parse. Hasilnya menjadi dasar ambang NFR-01 |
 | SP-04 | Vector dari SVG (A5, v2) | `figma.createNodeFromSvg` (atau API setara) menghasilkan vector yang dapat diedit dari ikon nyata (stroke, `viewBox`, `currentColor`, gradient) | 10 ikon dari pustaka ikon umum + SVG inline halaman acuan | Node vector editable; bounding box sesuai dalam toleransi | Ikon yang gagal dirasterisasi menjadi gambar dan dilaporkan; K2-02 perlu cakupan yang lebih sempit (usulan PRD) |
@@ -585,7 +586,7 @@ Urutan prioritas: SP-01 → SP-02 → SP-05 → SP-08 → SP-03 → SP-06 → SP
 | R7 | — | 10 (uji ulang), 8.1 (dependensi minimal) |
 | R8 | SW, main | 7.5, 7.4 |
 
-## 13. Daftar keputusan, usulan perubahan PRD, dan serah ke SCHEMA
+## 13. Daftar keputusan, perubahan PRD, dan serah ke SCHEMA
 
 ### 13.1 Ringkasan ADR
 
@@ -607,19 +608,19 @@ Setiap ADR di bawah memuat konteks, opsi, keputusan, alasan, dan konsekuensi di 
 | AD-12 | Download lewat `Blob` + `<a download>` di popup; Copy lewat `navigator.clipboard` di popup | `chrome.downloads` (izin tambahan); offscreen document untuk clipboard (tidak perlu karena popup punya fokus) | 3.7 |
 | AD-13 | Font asli disimpan di `setSharedPluginData("codetoframe", …)` | `setPluginData` (hanya terbaca plugin ini); nama layer (sudah dipakai FR-PLG-11) | 7.2 |
 
-### 13.2 Usulan perubahan PRD
+### 13.2 Perubahan PRD yang sudah diterima dan diterapkan di PRD v0.4
 
-PRD tidak diubah oleh dokumen ini. Usulan berikut menunggu keputusan pemilik.
+Usulan berikut diterima pemilik dan sudah diterapkan di PRD v0.4 (PRD 11.1 no. 16–22).
 
-| # | Bagian PRD | Usulan | Alasan |
-|---|---|---|---|
-| P-01 | G2 vs K1-06 | Perjelas G2: di v1, "tanpa node yang tidak perlu" **tidak** berarti meratakan wrapper, karena K1-06 menuntut hierarki sama dengan nesting elemen terlihat. Perataan wrapper bisa menjadi opsi di versi berikutnya | Keduanya saling tarik; arsitektur v1 mengikuti K1-06 |
-| P-02 | Bagian 6, 5.4 | Tambahkan baris **iframe same-origin**: v1 diperlakukan sama dengan iframe lintas domain (placeholder) | PRD hanya menyebut iframe lintas domain, sehingga perilaku iframe same-origin tidak terdefinisi |
-| P-03 | FR-EXT-12, FR-PLG-02 | Catat bahwa Copy/tempel praktis hanya untuk capture kecil, karena gambar tertanam base64 membuat teks bisa mencapai puluhan MB; untuk capture besar dianjurkan Download → upload | Batas praktis clipboard dan textarea; K1-08 tetap berlaku pada fixture |
-| P-04 | FR-EXT-07 | Ganti "font yang benar-benar dipakai bila dapat diketahui" menjadi "perkiraan font yang dipakai (keluarga pertama yang tersedia menurut `document.fonts`)" | Browser tidak mengekspos font yang dirender tanpa `chrome.debugger` (yang menampilkan banner dan izin berat) |
-| P-05 | FR-PLG-03 | Perjelas bahwa "tanpa node setengah jadi" berlaku untuk penolakan validasi; error tak terduga di tengah render menyisakan frame bertanda "(tidak lengkap)" + laporan | Rollback penuh menyembunyikan diagnostik; NFR-02 sudah menuntut degradasi bertahap |
-| P-06 | A1, NFR-06 | Tambahkan prasyarat Node.js LTS (untuk build dan relay) dan langkah pairing token sekali saat penyiapan awal | Konsekuensi AD-02 dan AD-04 |
-| P-07 | 5.1 / bagian 6 | Catat bahwa `<img>` berformat SVG di v1 dirasterisasi bila memungkinkan (SP-06), dan menjadi vector di v2 | Banyak logo memakai SVG lewat `<img>`; perilakunya perlu tertulis |
+| # | Bagian PRD | Perubahan | Alasan | Status |
+|---|---|---|---|---|
+| P-01 | G2 vs K1-06 | Perjelas G2: di v1, "tanpa node yang tidak perlu" **tidak** berarti meratakan wrapper, karena K1-06 menuntut hierarki sama dengan nesting elemen terlihat. Perataan wrapper bisa menjadi opsi di versi berikutnya | Keduanya saling tarik; arsitektur v1 mengikuti K1-06 | Diterima, diterapkan di PRD v0.4 |
+| P-02 | Bagian 6, 5.4 | Tambahkan baris **iframe same-origin**: v1 diperlakukan sama dengan iframe lintas domain (placeholder) | PRD hanya menyebut iframe lintas domain, sehingga perilaku iframe same-origin tidak terdefinisi | Diterima, diterapkan di PRD v0.4 |
+| P-03 | FR-EXT-12, FR-PLG-02 | Catat bahwa Copy/tempel praktis hanya untuk capture kecil, karena gambar tertanam base64 membuat teks bisa mencapai puluhan MB; untuk capture besar dianjurkan Download → upload | Batas praktis clipboard dan textarea; K1-08 tetap berlaku pada fixture | Diterima, diterapkan di PRD v0.4 |
+| P-04 | FR-EXT-07 | Ganti "font yang benar-benar dipakai bila dapat diketahui" menjadi "perkiraan font yang dipakai (keluarga pertama yang tersedia menurut `document.fonts`)" | Browser tidak mengekspos font yang dirender tanpa `chrome.debugger` (yang menampilkan banner dan izin berat) | Diterima, diterapkan di PRD v0.4 |
+| P-05 | FR-PLG-03 | Perjelas bahwa "tanpa node setengah jadi" berlaku untuk penolakan validasi; error tak terduga di tengah render menyisakan frame bertanda "(tidak lengkap)" + laporan | Rollback penuh menyembunyikan diagnostik; NFR-02 sudah menuntut degradasi bertahap | Diterima, diterapkan di PRD v0.4 |
+| P-06 | A1, NFR-06 | Tambahkan prasyarat Node.js LTS (untuk build dan relay) dan langkah pairing token sekali saat penyiapan awal | Konsekuensi AD-02 dan AD-04 | Diterima, diterapkan di PRD v0.4 |
+| P-07 | 5.1 / bagian 6 | Catat bahwa `<img>` berformat SVG di v1 dirasterisasi bila memungkinkan (SP-06), dan menjadi vector di v2 | Banyak logo memakai SVG lewat `<img>`; perilakunya perlu tertulis | Diterima, diterapkan di PRD v0.4 |
 
 ### 13.3 Diserahkan ke SCHEMA.md
 
@@ -630,3 +631,12 @@ Daftar lengkap ada di bagian 6, "Yang harus diputuskan SCHEMA.md". Ringkasnya:
 - nilai awal `formatVersion` dan aturan MINOR/MAJOR;
 - body JSON endpoint relay;
 - validator sebagai sumber kebenaran tunggal.
+
+---
+
+## Riwayat revisi
+
+| Versi | Tanggal | Perubahan |
+|---|---|---|
+| 0.1 | 2026-10-13 | Draf awal. |
+| 0.1.1 | 2026-10-13 | Menerapkan keputusan P-01 sampai P-07, preflight CORS, catatan token plugin dan izin host. |
