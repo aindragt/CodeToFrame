@@ -4,12 +4,12 @@
 |---|---|
 | Pemilik | Indra Pramudya |
 | Status | Draft |
-| Versi | 0.2 (revisi 2026-10-13) |
+| Versi | 0.3 (revisi 2026-10-13) |
 | Dokumen terkait | `docs/ARCHITECTURE.md` (belum ada), `docs/SCHEMA.md` (belum ada) |
 
 Label yang dipakai di dokumen ini:
 - **[ASUMSI]**: belum diputuskan pemilik, dipakai sementara agar persyaratan bisa diuji. Wajib dikonfirmasi atau diganti.
-- **[TERBUKA]**: dirujuk ke bagian 11.2 (Pertanyaan terbuka tersisa).
+- **[TERBUKA]**: dirujuk ke bagian 11.2 (Pertanyaan terbuka tersisa). Saat ini tidak ada yang tersisa.
 - **[DITENTUKAN DI ARCHITECTURE]**: arah sudah diputuskan, nilai atau angka pastinya ditetapkan di `docs/ARCHITECTURE.md`.
 
 ---
@@ -98,6 +98,7 @@ Fase dibagi berdasarkan kualitas, bukan tanggal. Fase berikutnya dimulai setelah
 - Shadow DOM tertutup (closed).
 - `<canvas>` / WebGL.
 - `<video>`.
+- Partial capture (hanya elemen yang dipilih pengguna): kandidat fitur setelah v2. v1 dan v2 menangkap seluruh halaman; format data disiapkan agar fitur ini bisa ditambahkan kemudian (NFR-08).
 
 ## 6. Kompatibilitas dan keterbatasan
 
@@ -131,12 +132,12 @@ Sasaran jangka panjang adalah semua halaman web dengan prinsip **best effort**. 
 | FR-EXT-02 | Capture memakai lebar viewport jendela saat ini dan tinggi halaman penuh (termasuk bagian di luar layar). | v1 |
 | FR-EXT-03 | Sebelum ekstraksi, extension menunggu konten selesai dimuat dan memicu lazy loading (mis. dengan scroll ke seluruh halaman). Waktu tunggu beberapa detik dengan batas jumlah scroll; angka pasti **[DITENTUKAN DI ARCHITECTURE]**. Bila batas tercapai (mis. infinite scroll), konten dipotong pada batas itu dan pemotongan dicatat di laporan (FR-EXT-19). | v1 |
 | FR-EXT-04 | Setiap elemen yang terlihat diekstrak dengan posisi dan ukuran dari `getBoundingClientRect` dan gaya dari `getComputedStyle`; hierarki mengikuti nesting DOM. | v1 |
-| FR-EXT-05 | Elemen yang tidak terlihat (`display: none`, `visibility: hidden`, ukuran 0 tanpa anak terlihat) tidak diekspor **[ASUMSI]**. Penanganan elemen yang terlihat menurut CSS tetapi berada di luar viewport **[TERBUKA]** (11.2 no. 14). | v1 |
+| FR-EXT-05 | Elemen yang tidak terlihat (`display: none`, `visibility: hidden`, ukuran 0 tanpa anak terlihat) tidak diekspor **[ASUMSI]**. Elemen di dalam area halaman penuh tetap ditangkap, termasuk yang berada di bawah layar. Elemen dilewati jika (a) berada sepenuhnya di luar area halaman (koordinat negatif atau melewati dimensi dokumen, mis. menu off-canvas atau teks tersembunyi yang diposisikan jauh di luar layar), atau (b) sepenuhnya terpotong oleh `overflow: hidden` induknya **[ASUMSI]** (A6). Jumlah elemen yang dilewati dicatat di laporan (FR-EXT-19). | v1 |
 | FR-EXT-06 | Properti v1 (bagian 5.1) diekstrak untuk setiap node yang relevan. | v1 |
 | FR-EXT-07 | Untuk teks, nama font asli (nilai `font-family` dan font yang benar-benar dipakai bila dapat diketahui) dicatat. | v1 |
 | FR-EXT-08 | Gambar `<img>`, termasuk lintas domain, diambil oleh service worker extension (host permissions) dan disertakan sebagai data. | v1 |
 | FR-EXT-09 | Gambar yang gagal diambil atau melebihi batas ukuran ditandai sebagai gagal beserta alasannya, tanpa menghentikan capture. Batas ukuran per gambar dan total per capture **[DITENTUKAN DI ARCHITECTURE]**. | v1 |
-| FR-EXT-10 | Hasil capture dikirim langsung ke plugin Figma tanpa salin-tempel manual. Komponen lokal tambahan (mis. relay localhost) diperbolehkan; mekanisme diputuskan di ARCHITECTURE. | v1 |
+| FR-EXT-10 | Hasil capture dikirim langsung ke plugin Figma tanpa salin-tempel manual. Komponen lokal tambahan (mis. relay localhost) diperbolehkan; mekanisme diputuskan di ARCHITECTURE. Prasyarat: plugin sedang terbuka di Figma (FR-EXT-21, A7). Opsi agar komponen lokal menyimpan capture terakhir sementara di memori, sehingga plugin dapat mengambilnya saat dibuka dan urutan langkah pengguna tidak kaku, **[DITENTUKAN DI ARCHITECTURE]**. | v1 |
 | FR-EXT-11 | Tersedia aksi "Download .json" yang menyimpan hasil capture sebagai file. | v1 |
 | FR-EXT-12 | Tersedia aksi "Copy" yang menyalin hasil capture ke clipboard, dijalankan dari konteks yang tidak bergantung pada fokus dokumen halaman. | v1 |
 | FR-EXT-13 | UI extension menampilkan indikator progres selama capture (tahap yang sedang berjalan), status akhir (berhasil, gagal), dan pesan galat yang menyebut penyebabnya. | v1 |
@@ -145,14 +146,15 @@ Sasaran jangka panjang adalah semua halaman web dengan prinsip **best effort**. 
 | FR-EXT-16 | Ekstraksi informasi layout flex/grid yang dibutuhkan untuk usulan Auto Layout. | v2 |
 | FR-EXT-17 | Ekstraksi `position: fixed`/`sticky` dan `transform` tanpa duplikasi atau pergeseran akibat scroll saat capture. | v3 |
 | FR-EXT-18 | Pengguna dapat memilih preset viewport sebelum capture: Desktop 1440, Tablet 768, Mobile 375. Preset diemulasikan lewat extension tanpa mengubah ukuran jendela pengguna. | v3 |
-| FR-EXT-19 | Setelah ekstraksi, extension menampilkan laporan ringkas: jumlah elemen, jumlah gambar (berhasil/gagal), font yang dipakai, serta peringatan dan error (termasuk pemotongan karena batas scroll). | v1 |
+| FR-EXT-19 | Setelah ekstraksi, extension menampilkan laporan ringkas: jumlah elemen, jumlah gambar (berhasil/gagal), font yang dipakai, jumlah elemen yang dilewati karena berada di luar area halaman atau terpotong penuh (FR-EXT-05), serta peringatan dan error (termasuk pemotongan karena batas scroll). | v1 |
 | FR-EXT-20 | Elemen di dalam open shadow root ditelusuri dan diekstrak seperti elemen DOM biasa. | **[ASUMSI: v2]** |
+| FR-EXT-21 | Sebelum atau saat capture, extension memeriksa status koneksi transfer langsung (komponen lokal aktif, plugin terhubung). Jika belum siap, extension menampilkan pesan yang jelas (mis. meminta pengguna membuka plugin di Figma) dan menawarkan jalur cadangan (FR-EXT-11, FR-EXT-12). | v1 |
 
 ### 7.2 Figma Plugin
 
 | ID | Persyaratan | Versi |
 |---|---|---|
-| FR-PLG-01 | Plugin menerima hasil capture dari extension secara langsung (pasangan FR-EXT-10). Apakah plugin harus sedang terbuka saat capture, dan cara memberi tahu pengguna bila tidak, **[TERBUKA]** (11.2 no. 15). | v1 |
+| FR-PLG-01 | Plugin menerima hasil capture dari extension secara langsung (pasangan FR-EXT-10). Plugin yang sedang terbuka di Figma adalah prasyarat transfer langsung; bila plugin belum terbuka, pengguna diberi tahu lewat extension (FR-EXT-21). | v1 |
 | FR-PLG-02 | Plugin menerima data lewat upload file, drag-drop file `.json`, dan tempel teks. | v1 |
 | FR-PLG-03 | Data divalidasi sebelum dirender. Data yang tidak valid atau versi format yang tidak didukung ditolak dengan pesan yang jelas, tanpa membuat node setengah jadi. | v1 |
 | FR-PLG-04 | Plugin membuat satu frame akar seukuran halaman yang ditangkap, dengan frame anak mengikuti hierarki data dan posisi absolut. | v1 |
@@ -180,6 +182,7 @@ Sasaran jangka panjang adalah semua halaman web dengan prinsip **best effort**. 
 | NFR-05 Kompatibilitas Figma | Plugin berjalan di Figma Desktop, versi terbaru saat pengujian **[ASUMSI]**. Figma di browser tidak wajib untuk saat ini. |
 | NFR-06 Instalasi | README berisi langkah penyiapan awal manual (load unpacked, import plugin development, dan menjalankan relay lokal bila mekanisme ARCHITECTURE memakainya) yang dapat diikuti dari repo yang baru di-clone. |
 | NFR-07 Kompatibilitas format data | Data membawa nomor versi format; plugin menolak versi yang tidak didukung dengan pesan jelas (FR-PLG-03). |
+| NFR-08 Maintainability | Format data (SCHEMA) memungkinkan root hasil capture berupa elemen mana pun, bukan hanya `body`, agar partial capture (5.4) dapat ditambahkan kemudian tanpa mengubah format **[ASUMSI]**. |
 
 ## 9. Kriteria sukses
 
@@ -203,7 +206,7 @@ Sasaran jangka panjang adalah semua halaman web dengan prinsip **best effort**. 
 - K1-04. `<img>` dari domain lain muncul sebagai Image Fill dengan ukuran sama; gambar yang sengaja dibuat gagal muncul sebagai placeholder dan tercatat di laporan.
 - K1-05. Teks dengan font yang tidak ada di Figma dirender dengan pengganti, dan laporan menampilkan nama font asli serta penggantinya.
 - K1-06. Hierarki layer di Figma sama dengan nesting elemen terlihat di fixture.
-- K1-07. Alur langsung: setelah penyiapan awal (pasang extension, impor plugin, jalankan relay), setiap capture membutuhkan maksimal 1 langkah manual, yaitu klik "Capture" di extension, sampai frame muncul di Figma.
+- K1-07. Alur langsung: setelah penyiapan awal (pasang extension, impor plugin, jalankan relay) dan dengan plugin sudah terbuka di Figma, setiap capture membutuhkan maksimal 1 langkah manual, yaitu klik "Capture" di extension, sampai frame muncul di Figma.
 - K1-08. Keempat jalur cadangan (download, copy, upload/drag-drop, tempel) menghasilkan frame yang identik dengan jalur langsung.
 - K1-09. Fixture berisi nilai CSS yang tidak dikenali (termasuk nilai flex seperti `stretch`) di-import tanpa crash, dan peringatan tercatat.
 - K1-10. JSON rusak atau tidak lengkap ditolak/diproses sebagian sesuai FR-PLG-03 dan NFR-02, tanpa crash plugin.
@@ -248,6 +251,8 @@ Sasaran jangka panjang adalah semua halaman web dengan prinsip **best effort**. 
 | A3 | Teknologi (TypeScript, Vite atau esbuild, satu repo dengan folder `extension`, `plugin`, `shared`) adalah kecenderungan, difinalkan di ARCHITECTURE. | Ya, di ARCHITECTURE |
 | A4 | Font Inter tersedia sebagai fallback default di semua instalasi Figma. | Ya |
 | A5 | Figma Plugin API mendukung semua operasi yang dibutuhkan (Frame, Text, Vector, Image Fill, shadow, Auto Layout). | Ya; dukungan Vector node perlu investigasi lebih lanjut |
+| A6 | Aturan elemen di luar area halaman (FR-EXT-05): elemen di dalam area halaman penuh ditangkap; elemen yang sepenuhnya di luar area halaman atau sepenuhnya terpotong `overflow: hidden` induknya dilewati. | Ya, pada halaman acuan (9.1) |
+| A7 | Plugin Figma hanya aktif saat dibuka pengguna dan tidak dapat dijalankan dari luar. | Ya, di ARCHITECTURE |
 
 ## 11. Keputusan dan pertanyaan terbuka
 
@@ -267,12 +272,13 @@ Sasaran jangka panjang adalah semua halaman web dengan prinsip **best effort**. 
 | 10 | Preset viewport v3 | Desktop 1440, Tablet 768, Mobile 375; diemulasikan lewat extension tanpa mengubah ukuran jendela. | 5.3, FR-EXT-18, K3-03 |
 | 11 | Pengayaan font dan gambar v3 | Ditunda, diputuskan setelah v2 selesai. | 5.3 |
 | 12 | Dukungan Figma di browser | Tidak wajib; cukup Figma Desktop untuk saat ini. | NFR-05 |
+| 13 | Partial capture | Ditunda; v1 dan v2 menangkap seluruh halaman. Kandidat fitur setelah v2. Format data disiapkan agar root bisa elemen mana pun. | 5.4, NFR-08 |
+| 14 | Elemen di luar viewport | Elemen di dalam area halaman penuh ditangkap; dilewati jika sepenuhnya di luar area halaman atau sepenuhnya terpotong `overflow: hidden` induk. Jumlahnya dicatat di laporan. [ASUMSI], divalidasi pada halaman acuan. | FR-EXT-05, FR-EXT-19, A6 |
+| 15 | Plugin harus terbuka? | Ya, prasyarat transfer langsung. Extension memeriksa koneksi dan menawarkan jalur cadangan bila belum siap. Penyimpanan capture terakhir di komponen lokal [DITENTUKAN DI ARCHITECTURE]. | FR-EXT-10, FR-EXT-21, FR-PLG-01, K1-07, A7 |
 
 ### 11.2 Pertanyaan terbuka tersisa
 
-13. **Partial capture:** apakah perlu capture hanya elemen yang dipilih pengguna, bukan seluruh halaman? Berguna, tetapi menambah kompleksitas UI.
-14. **Elemen di luar viewport:** bagaimana menangani elemen yang terlihat menurut CSS tetapi berada di luar viewport? (Elemen `display: none` jelas dilewati.) Terkait FR-EXT-05.
-15. **Plugin harus terbuka?** Apakah plugin harus sedang terbuka di Figma saat capture agar transfer langsung berhasil, dan bagaimana pengguna diberi tahu bila tidak? Terkait FR-EXT-10, FR-PLG-01 → ARCHITECTURE.
+Tidak ada pada saat ini. Hal yang perlu divalidasi tercatat di tabel asumsi (bagian 10).
 
 ---
 
@@ -282,3 +288,4 @@ Sasaran jangka panjang adalah semua halaman web dengan prinsip **best effort**. 
 |---|---|---|
 | 0.1 | 2026-10-12 | Draf awal. |
 | 0.2 | 2026-10-13 | Menerapkan keputusan 12 pertanyaan terbuka; menambah open shadow DOM, halaman sangat panjang, laporan/progres (FR-EXT-19, FR-PLG-15), placeholder konten (FR-PLG-16), R8, A4–A5; risiko & asumsi jadi tabel. |
+| 0.3 | 2026-10-13 | Menutup pertanyaan 13–15: partial capture ditunda (5.4, NFR-08), aturan elemen di luar area halaman (FR-EXT-05, A6), plugin terbuka sebagai prasyarat (FR-EXT-21, A7); 11.2 kosong. |
