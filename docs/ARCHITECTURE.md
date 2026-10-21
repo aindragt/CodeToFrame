@@ -4,9 +4,9 @@
 |---|---|
 | Pemilik | Indra Pramudya |
 | Status | Draft |
-| Versi | 0.1.3 |
+| Versi | 0.1.4 |
 | Tanggal | 2026-10-21 |
-| Dokumen terkait | `docs/PRD.md` v0.5 (acuan utama), `docs/SCHEMA.md` v0.1.2, `docs/spikes/SP-01.md` (hasil SP-01/SP-02) |
+| Dokumen terkait | `docs/PRD.md` v0.5 (acuan utama), `docs/SCHEMA.md` v0.1.2, `docs/spikes/SP-01.md` (hasil SP-01/SP-02), `docs/spikes/SP-05.md` (hasil SP-05) |
 
 Label yang dipakai:
 - **[PERLU VERIFIKASI]**: fakta platform (Chrome/Figma) yang belum terkonfirmasi dari dokumentasi resmi. Setiap label punya spike di bagian 11.
@@ -352,10 +352,20 @@ Transaksi "tanpa node setengah jadi" (FR-PLG-03) berlaku untuk error fatal di R2
 - **Di plugin** (`shared/fonts`, murni; input berupa daftar font tersedia dari `listAvailableFontsAsync`):
   1. **Cocok persis:** nama keluarga ternormalisasi (huruf kecil, tanpa tanda kutip/spasi berlebih) sama, untuk setiap keluarga dalam daftar `font-family` secara berurutan.
   2. **Padanan nama:** cocok setelah normalisasi lanjut (buang akhiran seperti "Variable", "VF", "Web", nomor versi).
-  3. **Pemetaan manual kecil** untuk kasus umum (`shared/fonts/manual-map.ts`). Contoh bentuknya: font sistem → padanan yang umum tersedia. Isinya diisi dari hasil uji halaman acuan; tidak ditetapkan di sini.
+  3. **Pemetaan manual kecil** untuk kasus umum (`shared/fonts/manual-map.ts`). Contoh bentuknya: font sistem → padanan yang umum tersedia. Isinya diisi dari hasil uji halaman acuan. Kandidat awal dari SP-05 (keluarga yang tidak tersedia di Windows): `Helvetica`/`Helvetica Neue` → `Arial`, `Menlo` → `Consolas`, `SF Pro Text` → kategori sans-serif **[ASUMSI]**. Daftar font bergantung OS, jadi pemetaan tidak boleh berasumsi satu OS.
   4. **Kategori:** keluarga generik (`serif`/`sans-serif`/`monospace`) atau kategori yang tercantum di pemetaan manual → font default per kategori.
   5. **Inter.**
-- **Bobot dan gaya** CSS (100–900, italic) dipetakan ke nama style Figma yang tersedia untuk keluarga tersebut, dengan memilih bobot terdekat. Nama style Inter di Figma perlu dicek **[PERLU VERIFIKASI: mis. "Semi Bold" vs "SemiBold", SP-05]**.
+- **Bobot dan gaya** CSS (100–900, italic) dipetakan ke nama style Figma yang tersedia untuk keluarga tersebut, dengan memilih bobot terdekat. Penulisan nama style **berbeda antar keluarga** (SP-05): Inter memakai `Semi Bold`/`Extra Light`/`Extra Bold`, Open Sans/Lato/Roboto memakai `SemiBold`, Segoe UI memakai `Semibold`; bentuk yang salah gagal dimuat. Aturannya:
+  - style dicocokkan dengan normalisasi nama (huruf kecil, tanpa spasi dan tanda hubung) terhadap style yang tersedia untuk keluarga itu dari `listAvailableFontsAsync` (±30 ms untuk ±9500 font; diambil sekali per import);
+  - nama asli dari daftar dipakai saat memanggil `loadFontAsync`;
+  - style lebar (`Condensed …`, `Narrow …`, dan sejenisnya) diabaikan kecuali `font-stretch` meminta.
+
+  Nama style Inter untuk fallback (SP-05, diambil dari daftar runtime, bukan di-hardcode):
+
+  | Bobot | 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900 |
+  |---|---|---|---|---|---|---|---|---|---|
+  | Normal | `Thin` | `Extra Light` | `Light` | `Regular` | `Medium` | `Semi Bold` | `Bold` | `Extra Bold` | `Black` |
+  | Italic | `Thin Italic` | `Extra Light Italic` | `Light Italic` | `Italic` | `Medium Italic` | `Semi Bold Italic` | `Bold Italic` | `Extra Bold Italic` | `Black Italic` |
 - **Penyimpanan font asli (FR-PLG-06, AD-13):** `node.setSharedPluginData("codetoframe", "sourceFont", <JSON ringkas: family list, weight, style>)`. Shared plugin data dipilih (bukan `setPluginData`) agar dapat dibaca alat lain. Font asli juga tercantum di laporan (asli → pengganti).
 
 ### 7.3 Penamaan layer (FR-PLG-11)
@@ -545,7 +555,7 @@ Spike dijalankan berurutan sebelum implementasi fitur terkait. Setiap spike beru
 | SP-02 | Siklus hidup plugin (A7) | Konfirmasi plugin tidak bisa dijalankan dari luar. Ukur apakah polling iframe tetap berjalan saat tab file Figma lain aktif atau jendela diminimalkan | Plugin polling dengan log timestamp; pindah tab/minimize | Polling tetap ≤ 2× interval. **Hasil: LULUS SEBAGIAN**: ±2000 ms di latar belakang (maks. 2051), 0 gagal; heartbeat dinaikkan ke 5000 (`docs/spikes/SP-01.md`) | Bila di-throttle: naikkan `pluginHeartbeatTimeoutMs` dan perjelas pesan FR-EXT-21. Arsitektur tetap |
 | SP-03 | Data besar | Ukur pipeline pada halaman sintetis 10 000 / 50 000 node dan 50 MB gambar: chunking CS→SW, upload relay, parse di iframe, pull batch ke main, waktu `createFrame` | Fixture sintetis + metrik NFR-01 | Tab dan Figma tetap responsif (progres bergerak); tidak ada crash memori | Turunkan batas gambar; aktifkan `maxNodes`; pertimbangkan streaming parse. Hasilnya menjadi dasar ambang NFR-01 |
 | SP-04 | Vector dari SVG (A5, v2) | `figma.createNodeFromSvg` (atau API setara) menghasilkan vector yang dapat diedit dari ikon nyata (stroke, `viewBox`, `currentColor`, gradient) | 10 ikon dari pustaka ikon umum + SVG inline halaman acuan | Node vector editable; bounding box sesuai dalam toleransi | Ikon yang gagal dirasterisasi menjadi gambar dan dilaporkan; K2-02 perlu cakupan yang lebih sempit (usulan PRD) |
-| SP-05 | Font fallback (A4) | Inter tersedia di `listAvailableFontsAsync` dan `loadFontAsync` berhasil di Figma Desktop (juga tanpa internet). Catat nama style untuk bobot 100–900 | Plugin minimal yang mencetak daftar style Inter | Inter dan semua bobot yang dipakai fixture tersedia | Fallback memakai font pertama yang tersedia dari daftar sistem; A4 di PRD direvisi |
+| SP-05 | Font fallback (A4) | Inter tersedia di `listAvailableFontsAsync` dan `loadFontAsync` berhasil di Figma Desktop (juga tanpa internet). Catat nama style untuk bobot 100–900 | Plugin minimal yang mencetak daftar style Inter | Inter dan semua bobot yang dipakai fixture tersedia. **Hasil: LULUS** (`docs/spikes/SP-05.md`): 18 style, online dan offline | Fallback memakai font pertama yang tersedia dari daftar sistem; A4 di PRD direvisi |
 | SP-06 | Konversi gambar di SW | `createImageBitmap` + `OffscreenCanvas.convertToBlob` di SW untuk WebP, AVIF, SVG; `createImage` Figma menerima hasilnya | Halaman uji dengan berbagai format | Semua format menjadi PNG/JPEG dan dirender | SVG → coba rasterisasi di offscreen document (DOM `Image`), atau tunda ke v2 (vector) dengan placeholder di v1 |
 | SP-07 | Pesan UI ↔ main | Ukuran `postMessage` dengan `Uint8Array` besar, dan apakah main tetap responsif dengan pola pull batch | Kirim gambar 5 MB dan batch 200 node; ukur | Tidak ada error, UI progres ter-update di antara batch | Perkecil `renderBatchSize`; pecah gambar besar |
 | SP-08 | Metrik teks | Teks K1-01 (Inter 16/600) dan paragraf multi-baris membungkus sama di Figma dengan lebar tetap dari browser | Fixture `button.html` + paragraf | Jumlah baris dan tinggi sama dalam toleransi | Strategi teks (`textAutoResize`, lebar +ε) disesuaikan; R3 diperbarui dengan data |
@@ -649,4 +659,5 @@ Daftar lengkap ada di bagian 6, "Yang harus diputuskan SCHEMA.md". **Status: sud
 | 0.1 | 2026-10-13 | Draf awal. |
 | 0.1.1 | 2026-10-13 | Menerapkan keputusan P-01 sampai P-07, preflight CORS, catatan token plugin dan izin host. |
 | 0.1.2 | 2026-10-13 | Menyesuaikan dengan SCHEMA (U-01 sampai U-06), konfigurasi K-01/K-02, privasi URL. |
+| 0.1.4 | 2026-10-21 | Menerapkan hasil SP-05 (F-01 sampai F-04): aturan pencocokan nama style, tabel style Inter, kandidat pemetaan manual, status spike. |
 | 0.1.3 | 2026-10-21 | Menerapkan hasil SP-01/SP-02 (S-01 sampai S-10): fetch di main thread, `id` plugin tetap, `devAllowedDomains` hanya localhost, Origin absen, balasan Private Network, cek ukuran sebelum PUT, `pluginHeartbeatTimeoutMs` 5000, catatan memori relay, status spike. |

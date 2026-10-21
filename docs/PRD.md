@@ -4,8 +4,8 @@
 |---|---|
 | Pemilik | Indra Pramudya |
 | Status | Draft |
-| Versi | 0.5 (revisi 2026-10-13) |
-| Dokumen terkait | `docs/ARCHITECTURE.md` (v0.1.2), `docs/SCHEMA.md` (v0.1.1) |
+| Versi | 0.5.1 (revisi 2026-10-21) |
+| Dokumen terkait | `docs/ARCHITECTURE.md` (v0.1.4), `docs/SCHEMA.md` (v0.1.2), `docs/spikes/` (SP-01, SP-05) |
 
 Label yang dipakai di dokumen ini:
 - **[ASUMSI]**: belum diputuskan pemilik, dipakai sementara agar persyaratan bisa diuji. Wajib dikonfirmasi atau diganti.
@@ -253,7 +253,7 @@ Sasaran jangka panjang adalah semua halaman web dengan prinsip **best effort**. 
 | A1 | Pengguna memakai Chrome desktop, akun Figma yang dapat menjalankan plugin development, dan Node.js LTS (untuk build dan menjalankan komponen lokal), serta melakukan pairing token sekali saat penyiapan awal. | Tidak (prasyarat penggunaan) |
 | A2 | Pengguna bertanggung jawab atas halaman yang ditangkap; tidak ada bagian hukum/etika di PRD ini. | Tidak |
 | A3 | Teknologi (TypeScript, Vite atau esbuild, satu repo dengan folder `extension`, `plugin`, `shared`) adalah kecenderungan, difinalkan di ARCHITECTURE. | Ya, di ARCHITECTURE |
-| A4 | Font Inter tersedia sebagai fallback default di semua instalasi Figma. | Ya |
+| A4 | Font Inter tersedia sebagai fallback default di semua instalasi Figma. | Ya. Terkonfirmasi di Windows 11 + Figma Desktop 126.7.10, online dan offline (SP-05); macOS dan Figma dibuka tanpa internet sejak awal belum diuji |
 | A5 | Figma Plugin API mendukung semua operasi yang dibutuhkan (Frame, Text, Vector, Image Fill, shadow, Auto Layout). | Ya; dukungan Vector node perlu investigasi lebih lanjut |
 | A6 | Aturan elemen di luar area halaman (FR-EXT-05): elemen di dalam area halaman penuh ditangkap; elemen yang sepenuhnya di luar area halaman atau sepenuhnya terpotong `overflow: hidden` induknya dilewati. | Ya, pada halaman acuan (9.1) |
 | A7 | Plugin Figma hanya aktif saat dibuka pengguna dan tidak dapat dijalankan dari luar. | Ya, di ARCHITECTURE |
@@ -306,3 +306,4 @@ Tidak ada pada saat ini. Hal yang perlu divalidasi tercatat di tabel asumsi (bag
 | 0.3.1 | 2026-10-13 | K1-07 dibuat netral terhadap mekanisme transfer langsung. |
 | 0.4 | 2026-10-13 | Menerapkan P-01 sampai P-07 hasil tinjauan ARCHITECTURE. |
 | 0.5 | 2026-10-13 | Menerapkan hasil tinjauan SCHEMA (PQ-01 sampai PQ-03, U-07, U-08). |
+| 0.5.1 | 2026-10-21 | Status A4 dari SP-05 (F-05); rujukan versi dokumen terkait. |
