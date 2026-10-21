@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --bg: #fff; --fg: #1e1e1e; --muted: #6b6b6b; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #2c2c2c; --fg: #f0f0f0; --muted: #a8a8a8; } }
+  body { font: 12px/1.45 system-ui, sans-serif; margin: 0; padding: 10px; background: var(--bg); color: var(--fg); }
+  .row { display: flex; gap: 6px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
+  label { color: var(--muted); }
+  textarea { width: 100%; height: 470px; box-sizing: border-box; font: 11px/1.3 ui-monospace, monospace; }
+</style>
+</head>
+<body>
+<div class="row">
+  <label>Kondisi
+    <select id="cond"><option value="online">online</option><option value="offline">offline (internet dimatikan)</option></select>
+  </label>
+  <button id="run">Run tests</button>
+  <button id="copy">Salin hasil</button>
+  <span id="state"></span>
+</div>
+<textarea id="out" readonly placeholder="Hasil muncul di sini"></textarea>
+<script>
+const $ = (id) => document.getElementById(id);
+$('run').onclick = () => { $('state').textContent = 'menjalankan…'; $('out').value = ''; parent.postMessage({ pluginMessage: { type: 'run' } }, '*'); };
+window.onmessage = (ev) => {
+  const m = ev.data && ev.data.pluginMessage;
+  if (!m || m.type !== 'result') return;
+  m.report.condition = $('cond').value;
+  $('out').value = JSON.stringify(m.report, null, 2);
+  $('state').textContent = 'selesai';
+};
+$('copy').onclick = () => {
+  $('out').select();
+  const ok = document.execCommand('copy');
+  $('state').textContent = ok ? 'tersalin — tempel ke chat' : 'gagal menyalin; pilih teks lalu Ctrl+C';
+};
+</script>
+</body>
+</html>
