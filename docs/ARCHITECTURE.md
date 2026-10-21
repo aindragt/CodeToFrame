@@ -4,9 +4,9 @@
 |---|---|
 | Pemilik | Indra Pramudya |
 | Status | Draft |
-| Versi | 0.1.2 |
-| Tanggal | 2026-10-13 |
-| Dokumen terkait | `docs/PRD.md` v0.5 (acuan utama), `docs/SCHEMA.md` v0.1.1 |
+| Versi | 0.1.3 |
+| Tanggal | 2026-10-21 |
+| Dokumen terkait | `docs/PRD.md` v0.5 (acuan utama), `docs/SCHEMA.md` v0.1.2, `docs/spikes/SP-01.md` (hasil SP-01/SP-02) |
 
 Label yang dipakai:
 - **[PERLU VERIFIKASI]**: fakta platform (Chrome/Figma) yang belum terkonfirmasi dari dokumentasi resmi. Setiap label punya spike di bagian 11.
@@ -72,8 +72,8 @@ flowchart LR
 | **Service worker** (`extension/src/background`) | Proses extension (MV3) | `scripting`, `storage`, `host_permissions: ["<all_urls>"]` | Orkestrasi capture, status progres, fetch dan konversi gambar, merakit amplop data, simpan ke IndexedDB, kirim ke relay, cek status koneksi | Akses DOM; clipboard; menampilkan UI; menerima perintah fetch URL bebas dari content script (hanya URL gambar yang tercatat di daftar node) |
 | **Popup** (`extension/src/popup`) | Halaman extension, punya fokus dokumen saat terbuka | Sama dengan origin extension | Tombol Capture, status koneksi (FR-EXT-21), progres (FR-EXT-13), laporan ringkas (FR-EXT-19), Download (FR-EXT-11), Copy (FR-EXT-12), pengaturan token pairing | Menjalankan capture (popup bisa tertutup kapan saja); menyimpan state penting di memorinya sendiri |
 | **Relay lokal** (`relay/`) | Proses Node.js di terminal pengguna | Listen hanya di loopback | Menerima capture dari extension, menyimpan satu capture terakhir di memori, menyajikannya ke plugin, melacak heartbeat plugin | Menyimpan ke disk (kecuali file token); mencatat isi capture di log; menerima koneksi non-loopback; memproses/mengubah isi capture |
-| **UI plugin** (`plugin/src/ui`) | Iframe Figma (`figma.showUI`), punya akses API browser | `networkAccess.devAllowedDomains` ke relay | Polling relay, meminta token pairing ke main thread lewat pesan (karena `figma.clientStorage` diakses dari main thread **[PERLU VERIFIKASI]**, SP-01), upload/drag-drop/tempel (FR-PLG-02), parse + validasi + cek versi, decode gambar, menyuplai batch ke main thread, menampilkan progres dan laporan | Mengakses scene Figma; memetakan CSS ke Figma |
-| **Main thread plugin** (`plugin/src/main`) | Sandbox Figma (tanpa API browser, ES2020+) | Scene API Figma, `documentAccess: "dynamic-page"` | Pemuatan font + fallback, pembuatan node, penerapan hasil pemetaan, verifikasi Auto Layout (v2), menyusun laporan import | Network; parsing JSON mentah dari luar tanpa validasi; logika pemetaan sendiri di luar modul `shared/mapping` |
+| **UI plugin** (`plugin/src/ui`) | Iframe Figma (`figma.showUI`), punya akses API browser | `networkAccess.devAllowedDomains` ke relay | Polling relay, meminta token pairing ke main thread lewat pesan (karena `figma.clientStorage` hanya tersedia di main thread; terkonfirmasi di SP-01), upload/drag-drop/tempel (FR-PLG-02), parse + validasi + cek versi, decode gambar, menyuplai batch ke main thread, menampilkan progres dan laporan | Mengakses scene Figma; memetakan CSS ke Figma |
+| **Main thread plugin** (`plugin/src/main`) | Sandbox Figma (ES2020+; tanpa DOM, tetapi punya `fetch` dan `setTimeout`, SP-01) | Scene API Figma, `documentAccess: "dynamic-page"`; `fetch` terikat `devAllowedDomains` | Pemuatan font + fallback, pembuatan node, penerapan hasil pemetaan, verifikasi Auto Layout (v2), menyusun laporan import | Network di v1 (koneksi relay tetap di UI sampai SP-07 mengukur main thread; S-01 di `docs/spikes/SP-01.md`); parsing JSON mentah dari luar tanpa validasi; logika pemetaan sendiri di luar modul `shared/mapping` |
 | **shared** (`shared/`) | Di-bundle ke semua komponen | — | Tipe data, konstanta konfigurasi, validator, pemetaan CSS→Figma, penamaan layer, aturan filter keterlihatan, pencocokan font, simulasi Auto Layout | Bergantung pada API Chrome, Figma, Node, atau DOM (harus murni agar bisa diuji unit) |
 
 Pelajaran versi lama yang dikunci di batas ini:
@@ -85,9 +85,9 @@ Pelajaran versi lama yang dikunci di batas ini:
 ### 3.1 Konteks
 
 FR-EXT-10 menuntut transfer tanpa salin-tempel; K1-07 menuntut maksimal 1 klik per capture setelah penyiapan awal dan dengan plugin terbuka. Fakta platform:
-- Main thread plugin tidak punya `fetch`/network; hanya iframe UI yang punya (Figma, "How plugins run").
+- Main thread plugin ternyata punya `fetch` (dengan `Origin: null`) yang terikat `devAllowedDomains`; iframe UI juga punya (SP-01, P7; Figma, "Making network requests"). Di v1, koneksi ke relay tetap dilakukan dari iframe UI. Memindahkannya ke main thread adalah opsi yang dikaji setelah SP-07.
 - Iframe UI boleh menghubungi domain yang dideklarasikan di manifest; localhost dengan port didukung, dan untuk server pengembangan dianjurkan memakai `devAllowedDomains` (Figma, "Plugin manifest").
-- Plugin tidak bisa dijalankan dari luar Figma dan hanya aktif selama dibuka (A7; dikonfirmasi sebagian oleh dokumentasi `closePlugin`, sisanya **[PERLU VERIFIKASI]**, spike SP-02).
+- Plugin tidak bisa dijalankan dari luar Figma dan hanya aktif selama dibuka (A7). SP-02 mengonfirmasi bahwa polling berhenti saat plugin ditutup. Peluncuran dari luar Figma belum diuji **[PERLU VERIFIKASI]**.
 - Service worker extension dengan host permissions dapat melakukan fetch lintas origin (Chrome, "Cross-origin network requests").
 
 Jadi harus ada titik temu yang bisa dijangkau extension **dan** iframe plugin. Plugin tidak bisa menjadi server, sehingga plugin harus menarik (pull) data.
@@ -199,6 +199,7 @@ Saat popup dibuka dan tepat sebelum capture, service worker memanggil `GET /v1/s
 | Token ditolak (401) | "Token pairing tidak cocok. Periksa pengaturan." | Sama dengan di atas |
 | Relay aktif, plugin tidak terhubung (heartbeat lebih tua dari `pluginHeartbeatTimeoutMs`) | "Buka plugin CodeToFrame di Figma." + Download/Copy | Capture dikirim ke relay; popup menjelaskan bahwa capture menunggu di relay dan bisa diimpor saat plugin dibuka |
 | Relay aktif, plugin terhubung | Indikator hijau | Alur langsung |
+| Amplop > `relayMaxBodyBytes`, atau PUT besar gagal dengan galat jaringan | "Capture terlalu besar untuk transfer langsung." + Download | Extension memeriksa ukuran amplop **sebelum** PUT. Galat jaringan saat PUT besar diperlakukan sebagai "mungkin melebihi batas", karena relay bisa memutus koneksi tanpa 413 yang terbaca (SP-01, N8) |
 
 Jalur cadangan:
 - **Download** (FR-EXT-11): popup membaca amplop dari IndexedDB, membuat `Blob`, lalu memicu `<a download>`. Tidak butuh izin `downloads`.
@@ -213,7 +214,7 @@ Jalur cadangan:
   2. Chrome: `chrome://extensions` → Developer mode → Load unpacked → `extension/dist`.
   3. Figma Desktop: Plugins → Development → Import plugin from manifest → `plugin/dist/manifest.json`.
   4. `npm run relay`. Saat pertama kali jalan, relay membuat token acak dan menyimpannya di file token di folder konfigurasi pengguna.
-  5. Tempel token ke pengaturan popup extension (disimpan di `chrome.storage.local`) dan ke pengaturan plugin. UI plugin mengirim token ke main thread lewat pesan, lalu main thread menyimpannya di `figma.clientStorage`. Saat plugin dibuka, UI meminta token ke main thread lewat pesan. Alasannya, `figma.clientStorage` diakses dari main thread, bukan dari iframe UI **[PERLU VERIFIKASI]**, SP-01.
+  5. Tempel token ke pengaturan popup extension (disimpan di `chrome.storage.local`) dan ke pengaturan plugin. UI plugin mengirim token ke main thread lewat pesan, lalu main thread menyimpannya di `figma.clientStorage`. Saat plugin dibuka, UI meminta token ke main thread lewat pesan. Alasannya, `figma.clientStorage` hanya tersedia di main thread; iframe UI tidak punya objek `figma` maupun `localStorage` (SP-01). `clientStorage` membutuhkan `id` di manifest plugin, dan datanya terikat pada id itu. Karena itu id dibuat tetap di repo (8.3).
 - **Rotasi token:** `npm run relay -- --new-token`, lalu ulangi langkah 5.
 
 ### 3.9 Keamanan dasar (AD-04)
@@ -228,17 +229,18 @@ Jalur cadangan:
 
 | Pembatasan | Alasan |
 |---|---|
-| Listen hanya di `127.0.0.1` dan `::1` | Menutup penyerang (2). Dua listener dipasang karena `localhost` dapat resolve ke IPv6 lebih dulu **[PERLU VERIFIKASI]** |
+| Listen hanya di `127.0.0.1` dan `::1` | Menutup penyerang (2). Dua listener dipasang karena `localhost` dapat resolve ke IPv6 lebih dulu. Terkonfirmasi di SP-01: semua koneksi dari Figma lewat `::1` |
 | Token bearer acak 128-bit di setiap request kecuali preflight `OPTIONS` (yang tidak mengembalikan data); dibandingkan secara constant-time | Penyerang (1): situs lain tidak tahu token. Juga mencegah penyuntikan capture palsu yang akan otomatis dirender di Figma |
 | Cek header `Host` harus `localhost:PORT`, `127.0.0.1:PORT`, atau `[::1]:PORT` | Menutup DNS rebinding (3) |
-| Allowlist `Origin`: hanya `chrome-extension://*` dan `null` (iframe plugin **[PERLU VERIFIKASI: nilai origin iframe plugin]**); origin `http(s)` situs ditolak 403 sebelum token diperiksa | Lapisan tambahan terhadap (1). `null` tetap bisa dipalsukan oleh iframe sandbox, jadi token adalah pertahanan utama |
-| CORS hanya memantulkan origin yang lolos allowlist; tanpa `*` | Situs lain tidak bisa membaca respons |
+| Allowlist `Origin`: `chrome-extension://*`, `null` (iframe plugin, terkonfirmasi SP-01), dan **Origin absen** (GET dari service worker tidak membawa `Origin`, SP-01); origin `http(s)` situs ditolak 403 sebelum token diperiksa | Lapisan tambahan terhadap (1). `null` tetap bisa dipalsukan oleh iframe sandbox, jadi token adalah pertahanan utama |
+| CORS hanya memantulkan origin yang lolos allowlist; tanpa `*` | Situs lain tidak bisa membaca respons. SP-01: Figma menerima `Access-Control-Allow-Origin: null` |
+| Preflight yang membawa `Access-Control-Request-Private-Network: true` dibalas `Access-Control-Allow-Private-Network: true` | Figma mengirim header ini; perlu tidaknya balasan belum diuji, tetapi biayanya nol (SP-01) |
 | Batas ukuran body `relayMaxBodyBytes`, satu request upload sekaligus | Mencegah kehabisan memori |
 | Penyimpanan hanya di memori, satu slot, ber-TTL | Data tidak tertinggal di disk (NFR-03) |
 | Log hanya metadata (method, path, status, ukuran byte); tidak pernah URL halaman, judul, atau isi | Isi capture tidak bocor ke riwayat terminal atau file log |
 | Respons error tidak menggemakan isi request | Mencegah kebocoran tidak langsung |
 
-Catatan: Chrome menerapkan pembatasan akses jaringan lokal dari situs publik (Private/Local Network Access), yang menambah lapisan terhadap (1). Namun desain ini **tidak bergantung** padanya **[PERLU VERIFIKASI: dampaknya ke iframe plugin Figma Desktop, SP-01]**.
+Catatan: Chrome menerapkan pembatasan akses jaringan lokal dari situs publik (Private/Local Network Access), yang menambah lapisan terhadap (1). Namun desain ini **tidak bergantung** padanya. SP-01: tidak ada prompt izin di Figma Desktop maupun Chrome. Preflight dari `https://example.com` ditolak relay (403) lalu diblokir Chrome.
 
 ## 4. Alur data per tahap
 
@@ -283,7 +285,8 @@ Transaksi "tanpa node setengah jadi" (FR-PLG-03) berlaku untuk error fatal di R2
 | Idle SW | 30 dtk tanpa event | Terverifikasi | Selama capture, pesan dari CS dan panggilan API me-reset timer. Amplop disimpan di IndexedDB agar tahan restart SW |
 | Ukuran gambar Figma | PNG/JPEG/GIF, maks. 4096 px per sisi | Terverifikasi (Figma, createImage) | Konversi dan downscale di SW sebelum dikirim (7.5) |
 | `postMessage` UI → main | Mendukung `Uint8Array`; batas ukuran tidak diketahui | **[PERLU VERIFIKASI]** | Main menarik batch berisi `renderBatchSize` node + gambar yang dirujuk saja |
-| Memori iframe dan parse JSON besar | Tidak diketahui | **[PERLU VERIFIKASI]** | Total gambar dibatasi `imageMaxTotalBytes`. Ukuran dan waktu parse amplop diukur sebagai metrik NFR-01 |
+| Memori iframe dan parse JSON besar | SP-01: unduh 100 MB 383–623 ms, parse 35–90 ms, heap ±534 MB dari batas ±4 GB | Terukur sebagian (SP-01) | Total gambar dibatasi `imageMaxTotalBytes`. Ukuran dan waktu parse amplop diukur sebagai metrik NFR-01 |
+| Memori relay | SP-01: RSS ±2,5× ukuran slot (100 MB → ±255 MB) | Terukur (SP-01) | Satu slot; `relayMaxBodyBytes` membatasi puncak memori |
 | Tempel teks di textarea | Praktis lambat untuk teks puluhan MB | **[PERLU VERIFIKASI]** | UI menyarankan Download → upload file untuk capture besar. Lihat P-03 |
 
 **Progres:**
@@ -452,7 +455,7 @@ CodeToFrame/
 
 **Manifest:**
 - **Extension:** MV3; `background.service_worker` dengan `type: "module"`; permissions `scripting`, `storage`; `host_permissions: ["<all_urls>"]` (dibutuhkan untuk fetch gambar lintas domain dan untuk relay). Content script tidak dideklarasikan statis; content script di-inject saat Capture. Karena repo publik, alasan izin `<all_urls>` harus dijelaskan di README. Opsi untuk dikaji nanti: meminta izin host secara opsional saat runtime (keputusan manifest saat ini tidak berubah).
-- **Plugin:** `editorType: ["figma"]`, `documentAccess: "dynamic-page"` (wajib untuk plugin baru, sehingga semua akses dokumen memakai API async), `networkAccess.allowedDomains: ["none"]`, `devAllowedDomains: ["http://localhost:<port>"]`. Apakah plugin development butuh `id`: **[PERLU VERIFIKASI]**.
+- **Plugin:** `editorType: ["figma"]`, `documentAccess: "dynamic-page"` (wajib untuk plugin baru, sehingga semua akses dokumen memakai API async), `networkAccess.allowedDomains: ["none"]`, `devAllowedDomains: ["http://localhost:<port>"]` (**hanya** bentuk `localhost`; Figma menolak IP literal seperti `127.0.0.1` dengan galat "must be a valid URL", SP-01). Semua URL relay di plugin memakai `localhost`. Manifest memuat **`id` tetap** (mis. `codetoframe`): import tanpa `id` berhasil, tetapi `figma.clientStorage` gagal ("Cannot access client storage without a plugin ID"), dan data `clientStorage` terikat pada id (SP-01).
 
 ## 9. Tabel konfigurasi nilai awal
 
@@ -462,10 +465,10 @@ Sumber tunggal: `shared/src/config.ts` (konstanta bertipe, diekspor). Manifest d
 |---|---|---|---|
 | `relayPort` | `47821` | Dipilih sembarang di luar port dev umum (3000/5173/8080) dan di bawah rentang ephemeral (49152+). Ganti bila bentrok | Relay, SW, manifest plugin |
 | `relayHosts` | `127.0.0.1`, `::1` | Loopback saja (3.9) | Relay |
-| `relayMaxBodyBytes` | 128 MiB | Gambar maksimal 50 MB × ~1,34 (base64) ≈ 67 MB, ditambah daftar node dengan ruang sisa | Relay |
+| `relayMaxBodyBytes` | 128 MiB | Gambar maksimal 50 MB × ~1,34 (base64) ≈ 67 MB, ditambah daftar node dengan ruang sisa. Memori relay ±2,5× ukuran slot (SP-01) | Relay |
 | `relaySlotTtlMs` | 15 menit | Cukup untuk "capture dulu, buka plugin kemudian", tanpa menahan data sensitif terlalu lama | Relay |
 | `pollIntervalMs` | 1000 | Latensi sekitar 1 dtk tidak terasa untuk alur 1 klik; beban loopback dapat diabaikan | UI plugin |
-| `pluginHeartbeatTimeoutMs` | 3000 | 3× interval polling, toleran terhadap satu-dua poll yang terlambat | Relay |
+| `pluginHeartbeatTimeoutMs` | 5000 | SP-02: saat Figma di latar belakang, polling dibatasi menjadi ±2000 ms (maks. 2051 ms). 5000 ≈ 2,5× interval terburuk dan toleran terhadap satu poll yang terlambat. Sebelumnya 3000 | Relay |
 | `statusTimeoutMs` | 1000 | Loopback seharusnya menjawab dalam milidetik; popup tidak boleh lama menunggu | SW |
 | `loadSettleMs` | 500 | Jeda awal untuk render SPA yang baru selesai | CS |
 | `scrollStepDelayMs` | 250 | Memberi waktu IntersectionObserver dan permintaan gambar dimulai | CS |
@@ -483,7 +486,7 @@ Sumber tunggal: `shared/src/config.ts` (konstanta bertipe, diekspor). Manifest d
 | `layerNameTextMaxChars` | 30 | Nama tetap terbaca di panel layer | shared/naming |
 | `placeholderFill` | abu-abu `#D9D9D9`, label `#6B6B6B` | Netral, mudah dibedakan dari konten | Main |
 | `warningSampleNodeIds` | 20 | Cukup untuk menemukan contoh di panel layer Figma sambil membatasi ukuran laporan (SCHEMA K-01) | shared/report |
-| `relayTitleMaxChars` | 120 | Judul terbaca di satu baris; menjaga header `X-CTF-Title` tetap kecil (SCHEMA K-02) **[PERLU VERIFIKASI: batas default `maxHeaderSize` Node, SP-01]** | SW, relay |
+| `relayTitleMaxChars` | 120 | Judul terbaca di satu baris; menjaga header `X-CTF-Title` tetap kecil (SCHEMA K-02). SP-01: `maxHeaderSize` default Node = 16 384 byte; judul terburuk 120 code point = 1440 karakter setelah encode | SW, relay |
 | `maxNodes` | tidak dibatasi | PRD tidak mengunci ambang; nilai ditentukan setelah pengukuran (NFR-01). Disiapkan sebagai kunci agar bisa diaktifkan tanpa perubahan arsitektur | CS |
 
 ## 10. Strategi pengujian
@@ -538,8 +541,8 @@ Spike dijalankan berurutan sebelum implementasi fitur terkait. Setiap spike beru
 
 | # | Spike | Tujuan | Cara membuktikan | Lulus | Gagal → dampak |
 |---|---|---|---|---|---|
-| SP-01 | Jalur transfer langsung (A7, FR-EXT-21, AD-02) | Iframe plugin development di Figma Desktop bisa `fetch` ke `http://localhost:PORT`; SW extension juga | Relay minimal + plugin minimal dengan `devAllowedDomains`. Catat nilai `Origin` iframe, perilaku CORS/preflight dengan header `Authorization`, apakah `figma.clientStorage` hanya dapat diakses dari main thread (alur token 3.8), prompt Local Network Access, IPv4/IPv6, batas default `maxHeaderSize` Node untuk header `X-CTF-Title` (`relayTitleMaxChars`). Uji payload 1 KB dan 100 MB | Kedua sisi round-trip sukses tanpa prompt berulang; 100 MB selesai tanpa error | Coba opsi C (UI dimuat dari relay). Bila C juga gagal: transfer langsung tidak layak dan hanya tersisa jalur cadangan, sehingga K1-07 perlu direvisi di PRD |
-| SP-02 | Siklus hidup plugin (A7) | Konfirmasi plugin tidak bisa dijalankan dari luar. Ukur apakah polling iframe tetap berjalan saat tab file Figma lain aktif atau jendela diminimalkan | Plugin polling dengan log timestamp; pindah tab/minimize | Polling tetap ≤ 2× interval | Bila di-throttle: naikkan `pluginHeartbeatTimeoutMs` dan perjelas pesan FR-EXT-21. Arsitektur tetap |
+| SP-01 | Jalur transfer langsung (A7, FR-EXT-21, AD-02) | Iframe plugin development di Figma Desktop bisa `fetch` ke `http://localhost:PORT`; SW extension juga | Relay minimal + plugin minimal dengan `devAllowedDomains`. Catat nilai `Origin` iframe, perilaku CORS/preflight dengan header `Authorization`, apakah `figma.clientStorage` hanya dapat diakses dari main thread (alur token 3.8), prompt Local Network Access, IPv4/IPv6, batas default `maxHeaderSize` Node untuk header `X-CTF-Title` (`relayTitleMaxChars`). Uji payload 1 KB dan 100 MB | Kedua sisi round-trip sukses tanpa prompt berulang; 100 MB selesai tanpa error. **Hasil: LULUS** (`docs/spikes/SP-01.md`) | Coba opsi C (UI dimuat dari relay). Bila C juga gagal: transfer langsung tidak layak dan hanya tersisa jalur cadangan, sehingga K1-07 perlu direvisi di PRD |
+| SP-02 | Siklus hidup plugin (A7) | Konfirmasi plugin tidak bisa dijalankan dari luar. Ukur apakah polling iframe tetap berjalan saat tab file Figma lain aktif atau jendela diminimalkan | Plugin polling dengan log timestamp; pindah tab/minimize | Polling tetap ≤ 2× interval. **Hasil: LULUS SEBAGIAN**: ±2000 ms di latar belakang (maks. 2051), 0 gagal; heartbeat dinaikkan ke 5000 (`docs/spikes/SP-01.md`) | Bila di-throttle: naikkan `pluginHeartbeatTimeoutMs` dan perjelas pesan FR-EXT-21. Arsitektur tetap |
 | SP-03 | Data besar | Ukur pipeline pada halaman sintetis 10 000 / 50 000 node dan 50 MB gambar: chunking CS→SW, upload relay, parse di iframe, pull batch ke main, waktu `createFrame` | Fixture sintetis + metrik NFR-01 | Tab dan Figma tetap responsif (progres bergerak); tidak ada crash memori | Turunkan batas gambar; aktifkan `maxNodes`; pertimbangkan streaming parse. Hasilnya menjadi dasar ambang NFR-01 |
 | SP-04 | Vector dari SVG (A5, v2) | `figma.createNodeFromSvg` (atau API setara) menghasilkan vector yang dapat diedit dari ikon nyata (stroke, `viewBox`, `currentColor`, gradient) | 10 ikon dari pustaka ikon umum + SVG inline halaman acuan | Node vector editable; bounding box sesuai dalam toleransi | Ikon yang gagal dirasterisasi menjadi gambar dan dilaporkan; K2-02 perlu cakupan yang lebih sempit (usulan PRD) |
 | SP-05 | Font fallback (A4) | Inter tersedia di `listAvailableFontsAsync` dan `loadFontAsync` berhasil di Figma Desktop (juga tanpa internet). Catat nama style untuk bobot 100–900 | Plugin minimal yang mencetak daftar style Inter | Inter dan semua bobot yang dipakai fixture tersedia | Fallback memakai font pertama yang tersedia dari daftar sistem; A4 di PRD direvisi |
@@ -646,3 +649,4 @@ Daftar lengkap ada di bagian 6, "Yang harus diputuskan SCHEMA.md". **Status: sud
 | 0.1 | 2026-10-13 | Draf awal. |
 | 0.1.1 | 2026-10-13 | Menerapkan keputusan P-01 sampai P-07, preflight CORS, catatan token plugin dan izin host. |
 | 0.1.2 | 2026-10-13 | Menyesuaikan dengan SCHEMA (U-01 sampai U-06), konfigurasi K-01/K-02, privasi URL. |
+| 0.1.3 | 2026-10-21 | Menerapkan hasil SP-01/SP-02 (S-01 sampai S-10): fetch di main thread, `id` plugin tetap, `devAllowedDomains` hanya localhost, Origin absen, balasan Private Network, cek ukuran sebelum PUT, `pluginHeartbeatTimeoutMs` 5000, catatan memori relay, status spike. |

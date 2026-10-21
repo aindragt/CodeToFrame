@@ -4,9 +4,9 @@
 |---|---|
 | Pemilik | Indra Pramudya |
 | Status | Draft |
-| Versi | 0.1.1 |
+| Versi | 0.1.2 |
 | Tanggal | 2026-10-13 |
-| Dokumen terkait | `docs/PRD.md` v0.5, `docs/ARCHITECTURE.md` v0.1.2 |
+| Dokumen terkait | `docs/PRD.md` v0.5, `docs/ARCHITECTURE.md` v0.1.3, `docs/spikes/SP-01.md` |
 
 Label yang dipakai:
 - **SD-xx**: keputusan SCHEMA (ringkasan di bagian 11.1). Prefiks AD milik ARCHITECTURE.
@@ -810,6 +810,8 @@ Setiap butir = minimal satu kasus uji. Butir bertanda K1-10 wajib ada di fixture
 
 `error` hanya berisi `code` dan, untuk 413, `limitBytes`. Tidak ada pesan teks.
 
+Pengecualian: header request yang melebihi `maxHeaderSize` Node (default 16 384 byte) dijawab **431** oleh parser HTTP Node, tanpa body JSON di atas (SP-01, N9). Klien memperlakukan 431 sama dengan `RELAY_BAD_REQUEST`.
+
 | HTTP | Kode | Kondisi |
 |---|---|---|
 | 400 | `RELAY_BAD_REQUEST` | Header wajib absen atau rusak, `known` bukan UUID, body ack tidak valid |
@@ -819,10 +821,12 @@ Setiap butir = minimal satu kasus uji. Butir bertanda K1-10 wajib ada di fixture
 | 404 | `RELAY_NOT_FOUND` | Path tidak dikenal, slot kosong, `captureId` tidak cocok dengan slot, atau slot sudah kedaluwarsa |
 | 405 | `RELAY_METHOD_NOT_ALLOWED` | Method tidak didukung untuk path tersebut |
 | 409 | `RELAY_UPLOAD_IN_PROGRESS` | Upload lain sedang berjalan (ARCHITECTURE 3.9) |
-| 413 | `RELAY_PAYLOAD_TOO_LARGE` | Body > `relayMaxBodyBytes`; `limitBytes` diisi |
+| 413 | `RELAY_PAYLOAD_TOO_LARGE` | Body > `relayMaxBodyBytes`; `limitBytes` diisi. Bila `Content-Length` sudah melebihi batas, relay dapat memutus koneksi sebelum klien membaca 413 (SP-01, N8); lihat 8.3 |
 | 415 | `RELAY_UNSUPPORTED_MEDIA` | `Content-Type` PUT bukan `application/json` |
 
 Urutan pemeriksaan: `Host` → `Origin` → (OPTIONS selesai di sini) → token → method/path → isi.
+
+Allowlist `Origin` (ARCHITECTURE 3.9): `chrome-extension://*`, `null`, dan Origin absen (GET dari service worker tidak membawa `Origin`, SP-01). Origin `http(s)` lain ditolak dengan `RELAY_FORBIDDEN_ORIGIN`.
 
 ### 8.3 `PUT /v1/capture` (extension)
 
@@ -842,6 +846,8 @@ Header request:
 ```json
 { "protocol": "1.0", "captureId": "7f9c2b1e-5d4a-4c3b-9e8f-1a2b3c4d5e6f", "receivedAt": "2026-10-13T08:15:31.004Z", "sizeBytes": 18234 }
 ```
+
+Sebelum PUT, extension membandingkan ukuran amplop dengan `relayMaxBodyBytes`. Bila lebih besar, extension tidak mengirim dan menawarkan Download. Galat jaringan saat PUT besar diperlakukan sebagai kemungkinan melebihi batas (ARCHITECTURE 3.7; SP-01).
 
 `captureId` dibuat extension, bukan relay. Relay hanya menggemakan nilai header (U-04). Slot sebelumnya diganti, dan `lastImport` (8.4) dihapus.
 
@@ -894,6 +900,7 @@ Respons `200`: `{ "protocol": "1.0", "captureId": "…", "slotCleared": true }`.
   - `Access-Control-Allow-Methods: GET, PUT, POST, OPTIONS`
   - `Access-Control-Allow-Headers: Authorization, Content-Type, X-CTF-Capture-Id, X-CTF-Format-Version, X-CTF-Captured-At, X-CTF-Title`
   - `Access-Control-Expose-Headers: X-CTF-Capture-Id`
+  - `Access-Control-Allow-Private-Network: true`, **hanya** bila request preflight membawa `Access-Control-Request-Private-Network: true` (Figma mengirimnya; SP-01)
 - Respons non-OPTIONS dari origin yang lolos juga membawa `Access-Control-Allow-Origin` dan `Vary: Origin`.
 
 ---
@@ -1163,7 +1170,7 @@ Tidak ada pertanyaan terbuka. Keputusan pemilik (2026-10-13):
 | # | Kunci | Nilai awal | Alasan | Dipakai di | Status |
 |---|---|---|---|---|---|
 | K-01 | `warningSampleNodeIds` | 20 | Cukup untuk menemukan contoh di panel layer Figma, sekaligus membatasi ukuran laporan (VC-26) | shared/report | Diterima, diterapkan di ARCHITECTURE v0.1.2 |
-| K-02 | `relayTitleMaxChars` | 120 | Judul cukup terbaca di satu baris UI plugin. Batas ini menjaga header jauh di bawah batas header Node.js **[PERLU VERIFIKASI: batas default `maxHeaderSize`]** | SW, relay | Diterima, diterapkan di ARCHITECTURE v0.1.2 |
+| K-02 | `relayTitleMaxChars` | 120 | Judul cukup terbaca di satu baris UI plugin. Batas ini menjaga header jauh di bawah batas header Node.js (terkonfirmasi SP-01: `maxHeaderSize` 16 384 byte; judul terburuk 1440 karakter) | SW, relay | Diterima, diterapkan di ARCHITECTURE v0.1.2 |
 
 Selain itu, `FORMAT_MAJOR = 3` dan `FORMAT_MINOR = 0` adalah konstanta format, bukan konfigurasi. Konstanta ini diletakkan di `shared/src/schema` (atau `shared/types`), bukan di `config.ts`.
 
@@ -1188,3 +1195,4 @@ Selain itu, `FORMAT_MAJOR = 3` dan `FORMAT_MINOR = 0` adalah konstanta format, b
 |---|---|---|
 | 0.1 | 2026-10-13 | Draf awal. |
 | 0.1.1 | 2026-10-13 | Keputusan PQ-01 sampai PQ-03, aturan rect root, definisi nodesCreated, status usulan. |
+| 0.1.2 | 2026-10-21 | Hasil SP-01: allowlist Origin absen, cek ukuran sebelum PUT, catatan 413/431, header Private Network di preflight, K-02 terkonfirmasi. |
